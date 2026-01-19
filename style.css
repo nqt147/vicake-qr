@@ -137,9 +137,10 @@ body::before {
 }
 
 /* ===== Main Content ===== */
+/* ===== Main Content ===== */
 .main-content {
-    background: var(--card-bg);
-    backdrop-filter: blur(20px);
+    background: #fff5f8;
+    /* Solid light pink background */
     border: 3px solid var(--soft-pink);
     border-radius: 40px;
     padding: 50px 40px;
@@ -150,8 +151,7 @@ body::before {
     z-index: 1;
     box-shadow:
         0 25px 50px var(--shadow-pink),
-        0 0 0 6px rgba(255, 255, 255, 0.8),
-        inset 0 0 30px rgba(255, 192, 203, 0.3);
+        0 0 0 6px rgba(255, 255, 255, 0.9);
 }
 
 /* Decorative top border */
