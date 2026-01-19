@@ -92,13 +92,14 @@ function initializePrizeTimes() {
 // ===== Firebase Configuration =====
 // Free Firebase project - syncs prize count across ALL devices in real-time!
 const firebaseConfig = {
-    apiKey: "AIzaSyDemo-Key-Replace-With-Your-Own",
+    apiKey: "AIzaSyBZxb5idyyOtCuz7GyFNMl0wUpWLBujqMU",
     authDomain: "vicake-qr.firebaseapp.com",
     databaseURL: "https://vicake-qr-default-rtdb.asia-southeast1.firebasedatabase.app",
     projectId: "vicake-qr",
-    storageBucket: "vicake-qr.appspot.com",
-    messagingSenderId: "123456789",
-    appId: "1:123456789:web:abcdef123456"
+    storageBucket: "vicake-qr.firebasestorage.app",
+    messagingSenderId: "734444653109",
+    appId: "1:734444653109:web:1d7977dd7f06daf2c8ff7c",
+    measurementId: "G-EBY8C93PKH"
 };
 
 // Initialize Firebase
