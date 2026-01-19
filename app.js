@@ -228,7 +228,7 @@ async function loadSettings() {
         settingsRef.on('value', (snapshot) => {
             const settings = snapshot.val();
             if (settings) {
-                if (settings.totalPrizes) CONFIG.TOTAL_PRIZES = settings.totalPrizes;
+                // Only update winRate from settings, totalPrizes is dynamic from prizes list now
                 if (settings.winRate !== undefined) CONFIG.WIN_RATE = settings.winRate / 100;
                 updateSettingsUI();
                 updateUI();
@@ -239,44 +239,37 @@ async function loadSettings() {
 
 function updateSettingsUI() {
     // Update sliders if on admin page
-    const totalSlider = document.getElementById('totalPrizesSlider');
     const rateSlider = document.getElementById('winRateSlider');
-    const totalValue = document.getElementById('totalPrizesValue');
     const rateValue = document.getElementById('winRateValue');
     const rateDisplay = document.getElementById('winRateDisplay');
 
-    if (totalSlider) totalSlider.value = CONFIG.TOTAL_PRIZES;
     if (rateSlider) rateSlider.value = CONFIG.WIN_RATE * 100;
-    if (totalValue) totalValue.textContent = CONFIG.TOTAL_PRIZES;
     if (rateValue) rateValue.textContent = Math.round(CONFIG.WIN_RATE * 100);
     if (rateDisplay) rateDisplay.textContent = Math.round(CONFIG.WIN_RATE * 100) + '%';
 }
-
-window.updateTotalPrizes = function (value) {
-    document.getElementById('totalPrizesValue').textContent = value;
-};
 
 window.updateWinRate = function (value) {
     document.getElementById('winRateValue').textContent = value;
 };
 
 window.saveSettings = async function () {
-    const totalPrizes = parseInt(document.getElementById('totalPrizesSlider').value);
-    const winRate = parseInt(document.getElementById('winRateSlider').value);
+    // Only save Win Rate, Total Prizes is managed by adding/removing prizes
+    const winRateSlider = document.getElementById('winRateSlider');
+    if (!winRateSlider) return;
+
+    const winRate = parseInt(winRateSlider.value);
 
     try {
         if (settingsRef) {
-            await settingsRef.set({
-                totalPrizes: totalPrizes,
+            await settingsRef.update({
                 winRate: winRate
             });
         }
 
         // Also save locally
-        CONFIG.TOTAL_PRIZES = totalPrizes;
         CONFIG.WIN_RATE = winRate / 100;
 
-        alert(`✅ Đã lưu!\n- Số quà: ${totalPrizes}\n- Tỷ lệ trúng: ${winRate}%`);
+        alert(`✅ Đã lưu tỷ lệ trúng: ${winRate}%`);
         location.reload();
     } catch (error) {
         console.error('Save settings error:', error);
@@ -600,13 +593,32 @@ window.getRewardData = async function () {
         date: new Date().toDateString(),
         totalPrizes: CONFIG.TOTAL_PRIZES,
         claimedCount: claimedCount,
-        prizes: window.prizeTimes.map((prize, index) => ({
+        prizes: (window.prizeTimes || []).map((prize, index) => ({
             ...prize,
             claimed: index < claimedCount
         }))
     };
 };
 
+// Clear ALL Firebase data
+window.clearAllFirebaseData = async function () {
+    if (confirm('⚠️ XÓA TOÀN BỘ DỮ LIỆU FIREBASE?\n\nĐiều này sẽ xóa:\n- Tất cả giải thưởng\n- Lịch sử tham gia\n- Số lượng đã phát\n- Cài đặt\n\nBạn có chắc chắn?')) {
+        try {
+            if (database) {
+                await database.ref('/').remove();
+                localStorage.clear();
+                alert('✅ Đã xóa toàn bộ dữ liệu!');
+                location.reload();
+            } else {
+                alert('❌ Firebase chưa kết nối!');
+            }
+        } catch (error) {
+            alert('❌ Lỗi: ' + error.message);
+        }
+    }
+};
+
 window.getClaimedCount = getClaimedCount;
 window.CONFIG = CONFIG;
+
 
