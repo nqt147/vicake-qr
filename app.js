@@ -286,11 +286,17 @@ document.addEventListener('DOMContentLoaded', () => {
 async function updateUI() {
     const claimedCount = await getClaimedCount();
     const prizeCountEl = document.getElementById('prizeCount');
+    const prizeTotalEl = document.getElementById('prizeTotal');
     const spinBtn = document.getElementById('spinBtn');
 
     if (prizeCountEl) {
         const remaining = Math.max(0, CONFIG.TOTAL_PRIZES - claimedCount);
         prizeCountEl.textContent = remaining;
+
+        // Update total count display
+        if (prizeTotalEl) {
+            prizeTotalEl.textContent = CONFIG.TOTAL_PRIZES;
+        }
 
         if (remaining === 0) {
             prizeCountEl.classList.add('empty');
