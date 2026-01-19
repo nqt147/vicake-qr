@@ -268,24 +268,22 @@ function closeResult() {
     }, 400);
 }
 
-// ===== Confetti Effect =====
+// ===== Confetti Effect - Bakery Style =====
 function createConfetti() {
-    const colors = ['#f093fb', '#f5576c', '#667eea', '#764ba2', '#38ef7d', '#f2c94c'];
+    const bakeryEmojis = ['🧁', '🍩', '🍰', '🍪', '🍫', '🍬', '🎂', '🍭', '💖', '✨'];
 
-    for (let i = 0; i < 50; i++) {
+    for (let i = 0; i < 40; i++) {
         setTimeout(() => {
             const confetti = document.createElement('div');
             confetti.className = 'confetti';
+            confetti.textContent = bakeryEmojis[Math.floor(Math.random() * bakeryEmojis.length)];
             confetti.style.left = Math.random() * 100 + 'vw';
-            confetti.style.background = colors[Math.floor(Math.random() * colors.length)];
-            confetti.style.width = (5 + Math.random() * 10) + 'px';
-            confetti.style.height = confetti.style.width;
-            confetti.style.borderRadius = Math.random() > 0.5 ? '50%' : '0';
+            confetti.style.fontSize = (15 + Math.random() * 20) + 'px';
             confetti.style.animationDuration = (2 + Math.random() * 2) + 's';
             document.body.appendChild(confetti);
 
             setTimeout(() => confetti.remove(), 4000);
-        }, i * 50);
+        }, i * 60);
     }
 }
 
