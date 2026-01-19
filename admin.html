@@ -51,7 +51,7 @@
         <div class="prize-list">
             <h3>📋 Danh Sách Giải Thưởng Hôm Nay</h3>
             <div id="prizeListContainer">
-                <!-- Prizes will be rendered here -->
+                <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
             </div>
         </div>
 
@@ -60,9 +60,6 @@
             <button class="btn btn-primary" onclick="refreshData()">
                 🔄 Làm mới
             </button>
-            <button class="btn btn-danger" onclick="resetAllPrizes()">
-                🗑️ Reset tất cả
-            </button>
         </div>
     </div>
 
@@ -70,61 +67,74 @@
     <script>
         // Initialize Admin Page
         document.addEventListener('DOMContentLoaded', () => {
-            loadAdminData();
+            setTimeout(loadAdminData, 500); // Wait for app.js to initialize
             generateQRCode();
         });
 
-        function loadAdminData() {
-            const data = getRewardData();
+        async function loadAdminData() {
+            try {
+                const data = await getRewardData();
 
-            // Update stats
-            document.getElementById('totalPrizes').textContent = data.totalPrizes;
-            document.getElementById('claimedPrizes').textContent = data.claimedCount;
-            document.getElementById('remainingPrizes').textContent = data.totalPrizes - data.claimedCount;
+                // Update stats
+                document.getElementById('totalPrizes').textContent = data.totalPrizes;
+                document.getElementById('claimedPrizes').textContent = data.claimedCount;
+                document.getElementById('remainingPrizes').textContent = data.totalPrizes - data.claimedCount;
 
-            // Render prize list
-            const container = document.getElementById('prizeListContainer');
-            container.innerHTML = '';
+                // Render prize list
+                const container = document.getElementById('prizeListContainer');
+                container.innerHTML = '';
 
-            const now = Date.now();
+                const now = Date.now();
 
-            data.prizes.forEach((prize, index) => {
-                const availableTime = new Date(prize.availableAt);
-                const timeStr = availableTime.toLocaleTimeString('vi-VN', {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                data.prizes.forEach((prize, index) => {
+                    const availableTime = new Date(prize.availableAt);
+                    const timeStr = availableTime.toLocaleTimeString('vi-VN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
 
-                let statusClass, statusText;
-                if (prize.claimed) {
-                    statusClass = 'claimed';
-                    statusText = 'Đã phát';
-                } else if (prize.availableAt <= now) {
-                    statusClass = 'available';
-                    statusText = 'Sẵn sàng';
-                } else {
-                    statusClass = 'expired';
-                    statusText = 'Chờ ' + timeStr;
-                }
+                    let statusClass, statusText;
+                    if (prize.claimed) {
+                        statusClass = 'claimed';
+                        statusText = 'Đã phát';
+                    } else if (prize.availableAt <= now) {
+                        statusClass = 'available';
+                        statusText = 'Sẵn sàng';
+                    } else {
+                        statusClass = 'expired';
+                        statusText = 'Chờ ' + timeStr;
+                    }
 
-                const html = `
-                    <div class="prize-item">
-                        <div class="prize-info">
-                            <span class="prize-emoji">${prize.emoji}</span>
-                            <div class="prize-details">
-                                <div class="prize-title">${prize.name}</div>
-                                <div class="prize-time">Mở lúc: ${timeStr}</div>
+                    const html = `
+                        <div class="prize-item">
+                            <div class="prize-info">
+                                <span class="prize-emoji">${prize.emoji}</span>
+                                <div class="prize-details">
+                                    <div class="prize-title">${prize.name}</div>
+                                    <div class="prize-time">Mở lúc: ${timeStr}</div>
+                                </div>
                             </div>
+                            <span class="prize-status ${statusClass}">${statusText}</span>
                         </div>
-                        <span class="prize-status ${statusClass}">${statusText}</span>
-                    </div>
-                `;
-                container.innerHTML += html;
-            });
+                    `;
+                    container.innerHTML += html;
+                });
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+                document.getElementById('prizeListContainer').innerHTML =
+                    '<p style="color: #f45c43;">Lỗi tải dữ liệu. Vui lòng thử lại.</p>';
+            }
         }
 
         function generateQRCode() {
-            const url = window.location.href.replace('admin.html', 'index.html');
+            // Use the production URL if available
+            let url = window.location.href.replace('admin.html', 'index.html');
+
+            // If on Vercel, use the proper domain
+            if (window.location.hostname.includes('vercel.app')) {
+                url = window.location.origin + '/index.html';
+            }
+
             document.getElementById('rewardUrl').textContent = url;
 
             // Generate QR code
@@ -135,13 +145,14 @@
             document.getElementById('qrcode').innerHTML = qr.createImgTag(6, 0);
         }
 
-        function refreshData() {
-            loadAdminData();
-            alert('Đã làm mới dữ liệu!');
+        async function refreshData() {
+            document.getElementById('prizeListContainer').innerHTML =
+                '<p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>';
+            await loadAdminData();
         }
 
-        // Auto refresh every 30 seconds
-        setInterval(loadAdminData, 30000);
+        // Auto refresh every 10 seconds
+        setInterval(loadAdminData, 10000);
     </script>
 </body>
 

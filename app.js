@@ -3,27 +3,34 @@ const CONFIG = {
     TOTAL_PRIZES: 10,
     DAY_START_HOUR: 8,  // 8 AM
     DAY_END_HOUR: 18,   // 6 PM
-    STORAGE_KEY: 'qr_reward_system'
+    STORAGE_KEY: 'qr_reward_system',
+    // CountAPI namespace - unique for your app
+    COUNTER_NAMESPACE: 'vicake-qr',
+    COUNTER_KEY: null // Will be set based on today's date
 };
 
 // ===== Prize List =====
 const PRIZES = [
-    { id: 1, name: "iPhone 15 Pro Max", emoji: "📱", rarity: "legendary" },
-    { id: 2, name: "AirPods Pro 2", emoji: "🎧", rarity: "epic" },
-    { id: 3, name: "Voucher 500K", emoji: "💰", rarity: "rare" },
-    { id: 4, name: "Voucher 200K", emoji: "💵", rarity: "common" },
-    { id: 5, name: "Voucher 100K", emoji: "💸", rarity: "common" },
-    { id: 6, name: "Thẻ cào 50K", emoji: "📞", rarity: "common" },
-    { id: 7, name: "Ly giữ nhiệt cao cấp", emoji: "☕", rarity: "rare" },
-    { id: 8, name: "Balo thời trang", emoji: "🎒", rarity: "rare" },
-    { id: 9, name: "Đồng hồ thông minh", emoji: "⌚", rarity: "epic" },
-    { id: 10, name: "Loa Bluetooth JBL", emoji: "🔊", rarity: "epic" }
+    { id: 1, name: "Voucher 500K", emoji: "💰", rarity: "legendary" },
+    { id: 2, name: "Voucher 200K", emoji: "💵", rarity: "epic" },
+    { id: 3, name: "Voucher 100K", emoji: "💸", rarity: "rare" },
+    { id: 4, name: "Thẻ cào 50K", emoji: "📞", rarity: "common" },
+    { id: 5, name: "Voucher 50K", emoji: "🎫", rarity: "common" },
+    { id: 6, name: "Ly giữ nhiệt cao cấp", emoji: "☕", rarity: "rare" },
+    { id: 7, name: "Voucher 30K", emoji: "🎁", rarity: "common" },
+    { id: 8, name: "Thẻ cào 20K", emoji: "📱", rarity: "common" },
+    { id: 9, name: "Voucher 20K", emoji: "🎀", rarity: "common" },
+    { id: 10, name: "Phiếu giảm giá 10%", emoji: "🏷️", rarity: "common" }
 ];
 
 // ===== Initialize =====
 document.addEventListener('DOMContentLoaded', () => {
+    // Set counter key based on today's date (resets daily)
+    const today = new Date();
+    CONFIG.COUNTER_KEY = `prizes-${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+
     createParticles();
-    initializeData();
+    initializePrizeTimes();
     updateUI();
 });
 
@@ -44,54 +51,23 @@ function createParticles() {
     }
 }
 
-// ===== Data Management =====
-function getData() {
-    const stored = localStorage.getItem(CONFIG.STORAGE_KEY);
-    if (stored) {
-        const data = JSON.parse(stored);
-        // Check if it's a new day
-        const today = new Date().toDateString();
-        if (data.date !== today) {
-            return resetData();
-        }
-        return data;
-    }
-    return resetData();
+// ===== Seeded Random Number Generator =====
+// Same seed = same random numbers = same prize times for everyone
+function seededRandom(seed) {
+    const x = Math.sin(seed++) * 10000;
+    return x - Math.floor(x);
 }
 
-function saveData(data) {
-    localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(data));
-}
-
-function resetData() {
+// ===== Generate Prize Times (Deterministic) =====
+function generatePrizeTimes() {
     const today = new Date();
-    const todayString = today.toDateString();
+    // Seed based on date - everyone gets same times
+    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
 
-    // Generate random times for prizes
-    const prizeTimes = generateRandomTimes(CONFIG.TOTAL_PRIZES, CONFIG.DAY_START_HOUR, CONFIG.DAY_END_HOUR);
-
-    const data = {
-        date: todayString,
-        totalPrizes: CONFIG.TOTAL_PRIZES,
-        claimedCount: 0,
-        prizes: PRIZES.slice(0, CONFIG.TOTAL_PRIZES).map((prize, index) => ({
-            ...prize,
-            availableAt: prizeTimes[index],
-            claimed: false,
-            claimedAt: null
-        }))
-    };
-
-    saveData(data);
-    return data;
-}
-
-function generateRandomTimes(count, startHour, endHour) {
     const times = [];
-    const today = new Date();
-
-    for (let i = 0; i < count; i++) {
-        const randomHour = startHour + Math.random() * (endHour - startHour);
+    for (let i = 0; i < CONFIG.TOTAL_PRIZES; i++) {
+        const randomValue = seededRandom(seed + i);
+        const randomHour = CONFIG.DAY_START_HOUR + randomValue * (CONFIG.DAY_END_HOUR - CONFIG.DAY_START_HOUR);
         const hours = Math.floor(randomHour);
         const minutes = Math.floor((randomHour - hours) * 60);
 
@@ -105,18 +81,66 @@ function generateRandomTimes(count, startHour, endHour) {
     return times;
 }
 
-function initializeData() {
-    getData(); // This will create or validate data
+function initializePrizeTimes() {
+    const times = generatePrizeTimes();
+    window.prizeTimes = times.map((time, index) => ({
+        ...PRIZES[index],
+        availableAt: time
+    }));
+}
+
+// ===== CountAPI Functions =====
+async function getClaimedCount() {
+    try {
+        const response = await fetch(`https://api.countapi.xyz/get/${CONFIG.COUNTER_NAMESPACE}/${CONFIG.COUNTER_KEY}`);
+        const data = await response.json();
+        return data.value || 0;
+    } catch (error) {
+        console.error('Error getting count:', error);
+        // Fallback to localStorage
+        return parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0');
+    }
+}
+
+async function incrementClaimedCount() {
+    try {
+        const response = await fetch(`https://api.countapi.xyz/hit/${CONFIG.COUNTER_NAMESPACE}/${CONFIG.COUNTER_KEY}`);
+        const data = await response.json();
+        // Also save to localStorage as backup
+        localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, data.value);
+        return data.value;
+    } catch (error) {
+        console.error('Error incrementing count:', error);
+        // Fallback to localStorage
+        let count = parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0');
+        count++;
+        localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, count);
+        return count;
+    }
+}
+
+// Check if current device already WON (ever, not just today)
+function hasDeviceWon() {
+    return localStorage.getItem('device_has_won') === 'true';
+}
+
+function markDeviceWon() {
+    localStorage.setItem('device_has_won', 'true');
+}
+
+// Random 50% chance
+function rollLucky() {
+    return Math.random() < 0.5; // 50% chance to win
 }
 
 // ===== UI Updates =====
-function updateUI() {
-    const data = getData();
+async function updateUI() {
+    const claimedCount = await getClaimedCount();
     const prizeCountEl = document.getElementById('prizeCount');
     const spinBtn = document.getElementById('spinBtn');
 
     if (prizeCountEl) {
-        const remaining = data.totalPrizes - data.claimedCount;
+        const remaining = Math.max(0, CONFIG.TOTAL_PRIZES - claimedCount);
         prizeCountEl.textContent = remaining;
 
         if (remaining === 0) {
@@ -127,50 +151,69 @@ function updateUI() {
     }
 
     if (spinBtn) {
-        const remaining = data.totalPrizes - data.claimedCount;
-        if (remaining === 0) {
+        const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
+        const deviceWon = hasDeviceWon();
+
+        if (remaining <= 0) {
             spinBtn.disabled = true;
             spinBtn.querySelector('.button-text').textContent = 'ĐÃ HẾT THƯỞNG';
+        } else if (deviceWon) {
+            spinBtn.disabled = true;
+            spinBtn.querySelector('.button-text').textContent = 'BẠN ĐÃ TRÚNG THƯỞNG';
         }
     }
 }
 
 // ===== Prize Logic =====
-function tryGetPrize() {
-    const data = getData();
-    const now = Date.now();
-
-    // Check if all prizes are claimed
-    if (data.claimedCount >= data.totalPrizes) {
-        showResult(false, null, "Rất tiếc, đã hết giải thưởng hôm nay!", "Vui lòng quay lại vào ngày mai.");
-        return;
+async function tryGetPrize() {
+    const spinBtn = document.getElementById('spinBtn');
+    if (spinBtn) {
+        spinBtn.disabled = true;
+        spinBtn.querySelector('.button-text').textContent = 'ĐANG QUAY SỐ...';
     }
 
-    // Find available prize (unclaimed and time has passed)
-    const availablePrize = data.prizes.find(prize =>
-        !prize.claimed && prize.availableAt <= now
-    );
-
-    if (availablePrize) {
-        // Claim the prize
-        availablePrize.claimed = true;
-        availablePrize.claimedAt = now;
-        data.claimedCount++;
-        saveData(data);
-
-        showResult(true, availablePrize, "🎊 Chúc mừng! 🎊", "Bạn đã nhận được:");
-        createConfetti();
-        updateUI();
-    } else {
-        // Check next available prize time
-        const nextPrize = data.prizes.find(prize => !prize.claimed);
-        if (nextPrize) {
-            const nextTime = new Date(nextPrize.availableAt);
-            const timeStr = nextTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
-            showResult(false, null, "Chúc may mắn lần sau! 🍀", `Chưa đến lượt nhận thưởng. Giải tiếp theo sẽ mở lúc ${timeStr}. Hãy thử lại sau nhé!`);
-        } else {
-            showResult(false, null, "Đã hết giải thưởng!", "Chúc may mắn lần sau! Vui lòng quay lại vào ngày mai. 🍀");
+    try {
+        // Check if device already won before
+        if (hasDeviceWon()) {
+            showResult(false, null, "Bạn đã trúng thưởng rồi!", "Mỗi thiết bị chỉ được trúng 1 lần duy nhất. Cảm ơn bạn đã tham gia! 🎉");
+            return;
         }
+
+        const claimedCount = await getClaimedCount();
+
+        // Check if all prizes are claimed
+        if (claimedCount >= CONFIG.TOTAL_PRIZES) {
+            showResult(false, null, "Đã hết giải thưởng!", "Tất cả giải thưởng đã được phát hết. Chúc may mắn lần sau! 🍀");
+            return;
+        }
+
+        // 🎲 RANDOM 50% CHANCE!
+        const isLucky = rollLucky();
+
+        if (isLucky) {
+            // Lucky! Get a random prize from remaining
+            const remainingPrizes = window.prizeTimes.filter((_, index) => index >= claimedCount);
+            const randomPrize = remainingPrizes[Math.floor(Math.random() * remainingPrizes.length)];
+
+            await incrementClaimedCount();
+            markDeviceWon();
+
+            showResult(true, randomPrize, "🎊 CHÚC MỪNG! 🎊", "Bạn đã trúng thưởng:");
+            createConfetti();
+        } else {
+            // Not lucky this time
+            const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
+            showResult(false, null, "Chưa trúng! 😅", `Hên xui mà! Còn ${remaining} giải thưởng. Bạn có thể thử lại! 🍀`);
+
+            // Re-enable button for another try
+            if (spinBtn) {
+                spinBtn.disabled = false;
+                spinBtn.querySelector('.button-text').textContent = 'THỬ LẠI 🎰';
+            }
+            return; // Don't update UI to keep button enabled
+        }
+    } finally {
+        await updateUI();
     }
 }
 
@@ -247,17 +290,29 @@ function createConfetti() {
 }
 
 // ===== Admin Functions (exposed globally) =====
-window.resetAllPrizes = function () {
+window.resetAllPrizes = async function () {
     if (confirm('Bạn có chắc muốn reset tất cả giải thưởng?')) {
-        resetData();
-        updateUI();
-        alert('Đã reset thành công!');
+        // Note: CountAPI doesn't support reset, so we change the key
+        const newKey = CONFIG.COUNTER_KEY + '-reset-' + Date.now();
+        CONFIG.COUNTER_KEY = newKey;
+        localStorage.removeItem('user_claimed_date');
+        alert('Đã reset thành công! Trang sẽ được tải lại.');
         location.reload();
     }
 };
 
-window.getRewardData = function () {
-    return getData();
+window.getRewardData = async function () {
+    const claimedCount = await getClaimedCount();
+    return {
+        date: new Date().toDateString(),
+        totalPrizes: CONFIG.TOTAL_PRIZES,
+        claimedCount: claimedCount,
+        prizes: window.prizeTimes.map((prize, index) => ({
+            ...prize,
+            claimed: index < claimedCount
+        }))
+    };
 };
 
+window.getClaimedCount = getClaimedCount;
 window.CONFIG = CONFIG;
