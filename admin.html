@@ -46,13 +46,6 @@
             <h3>🎛️ Cài Đặt</h3>
             <div style="padding: 15px 0;">
                 <label style="display: block; margin-bottom: 10px; font-weight: 600;">
-                    Số lượng giải thưởng: <span id="totalPrizesValue">10</span>
-                </label>
-                <input type="range" id="totalPrizesSlider" min="1" max="50" value="10"
-                    style="width: 100%; accent-color: var(--primary-pink);" onchange="updateTotalPrizes(this.value)">
-            </div>
-            <div style="padding: 15px 0; border-top: 1px solid var(--soft-pink);">
-                <label style="display: block; margin-bottom: 10px; font-weight: 600;">
                     Tỷ lệ trúng thưởng: <span id="winRateValue">50</span>%
                 </label>
                 <input type="range" id="winRateSlider" min="0" max="100" value="50"
@@ -61,6 +54,38 @@
             <button class="btn btn-primary" onclick="saveSettings()" style="margin-top: 15px; width: 100%;">
                 💾 Lưu cài đặt
             </button>
+        </div>
+
+        <!-- Prize Management Section -->
+        <div class="prize-list" style="margin-bottom: 30px;">
+            <h3>🎁 Quản Lý Giải Thưởng</h3>
+
+            <!-- Add New Prize Form -->
+            <div style="padding: 15px; background: rgba(255,182,193,0.2); border-radius: 15px; margin-bottom: 15px;">
+                <h4 style="margin-bottom: 10px;">➕ Thêm giải thưởng mới</h4>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" id="newPrizeName" placeholder="Tên giải (VD: Voucher 100K)"
+                        style="flex: 2; min-width: 150px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; font-family: inherit;">
+                    <input type="text" id="newPrizeEmoji" placeholder="🎁" maxlength="4"
+                        style="width: 60px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; text-align: center; font-size: 1.2rem;">
+                    <input type="number" id="newPrizeQty" placeholder="SL" min="1" value="1"
+                        style="width: 60px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; text-align: center;">
+                    <button class="btn btn-success" onclick="addPrize()" style="padding: 10px 20px;">
+                        ➕ Thêm
+                    </button>
+                </div>
+            </div>
+
+            <!-- Prize List -->
+            <div id="prizeManageList">
+                <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
+            </div>
+
+            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--soft-pink);">
+                <p style="font-size: 0.85rem; color: var(--text-secondary);">
+                    💡 Tổng giải thưởng: <strong id="totalPrizesCount">0</strong>
+                </p>
+            </div>
         </div>
 
         <!-- QR Code Section -->
@@ -264,6 +289,106 @@
 
         // Load history on init
         setTimeout(loadHistory, 800);
+
+        // ===== Prize Management =====
+        let prizesRef = null;
+
+        function initPrizeManagement() {
+            if (typeof firebase !== 'undefined' && firebase.database) {
+                prizesRef = firebase.database().ref('prizes');
+                loadPrizes();
+            }
+        }
+
+        async function loadPrizes() {
+            const container = document.getElementById('prizeManageList');
+            const countEl = document.getElementById('totalPrizesCount');
+            if (!container || !prizesRef) return;
+
+            try {
+                const snapshot = await prizesRef.once('value');
+                const data = snapshot.val() || {};
+                const prizes = Object.entries(data).map(([key, val]) => ({ ...val, key }));
+
+                if (prizes.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có giải thưởng. Hãy thêm mới!</p>';
+                    if (countEl) countEl.textContent = '0';
+                    return;
+                }
+
+                // Calculate total
+                const total = prizes.reduce((sum, p) => sum + (p.quantity || 1), 0);
+                if (countEl) countEl.textContent = total;
+
+                container.innerHTML = prizes.map(prize => `
+                    <div class="prize-item" style="margin-bottom: 8px;">
+                        <div class="prize-info">
+                            <span class="prize-emoji">${prize.emoji || '🎁'}</span>
+                            <div class="prize-details">
+                                <div class="prize-title">${prize.name}</div>
+                                <div class="prize-time">Số lượng: ${prize.quantity || 1}</div>
+                            </div>
+                        </div>
+                        <button onclick="deletePrize('${prize.key}')" 
+                            style="background: #ff4757; color: white; border: none; padding: 8px 15px; border-radius: 15px; cursor: pointer; font-weight: 600;">
+                            🗑️ Xóa
+                        </button>
+                    </div>
+                `).join('');
+
+                // Update CONFIG.TOTAL_PRIZES
+                if (typeof CONFIG !== 'undefined') {
+                    CONFIG.TOTAL_PRIZES = total;
+                }
+            } catch (error) {
+                console.error('Load prizes error:', error);
+                container.innerHTML = '<p style="color: #f45c43;">Lỗi tải danh sách giải</p>';
+            }
+        }
+
+        window.addPrize = async function () {
+            const name = document.getElementById('newPrizeName').value.trim();
+            const emoji = document.getElementById('newPrizeEmoji').value.trim() || '🎁';
+            const quantity = parseInt(document.getElementById('newPrizeQty').value) || 1;
+
+            if (!name) {
+                alert('⚠️ Vui lòng nhập tên giải thưởng!');
+                return;
+            }
+
+            try {
+                await prizesRef.push({
+                    name: name,
+                    emoji: emoji,
+                    quantity: quantity,
+                    createdAt: new Date().toISOString()
+                });
+
+                // Clear form
+                document.getElementById('newPrizeName').value = '';
+                document.getElementById('newPrizeEmoji').value = '';
+                document.getElementById('newPrizeQty').value = '1';
+
+                alert('✅ Đã thêm giải thưởng!');
+                loadPrizes();
+            } catch (error) {
+                alert('❌ Lỗi: ' + error.message);
+            }
+        };
+
+        window.deletePrize = async function (key) {
+            if (confirm('Xóa giải thưởng này?')) {
+                try {
+                    await prizesRef.child(key).remove();
+                    loadPrizes();
+                } catch (error) {
+                    alert('❌ Lỗi: ' + error.message);
+                }
+            }
+        };
+
+        // Init prize management
+        setTimeout(initPrizeManagement, 900);
     </script>
 </body>
 

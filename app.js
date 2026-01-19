@@ -9,19 +9,15 @@ const CONFIG = {
     COUNTER_KEY: null     // Will be set based on today's date
 };
 
-// ===== Prize List =====
-const PRIZES = [
-    { id: 1, name: "Voucher 500K", emoji: "💰", rarity: "legendary" },
-    { id: 2, name: "Voucher 200K", emoji: "💵", rarity: "epic" },
-    { id: 3, name: "Voucher 100K", emoji: "💸", rarity: "rare" },
-    { id: 4, name: "Thẻ cào 50K", emoji: "📞", rarity: "common" },
-    { id: 5, name: "Voucher 50K", emoji: "🎫", rarity: "common" },
-    { id: 6, name: "Ly giữ nhiệt cao cấp", emoji: "☕", rarity: "rare" },
-    { id: 7, name: "Voucher 30K", emoji: "🎁", rarity: "common" },
-    { id: 8, name: "Thẻ cào 20K", emoji: "📱", rarity: "common" },
-    { id: 9, name: "Voucher 20K", emoji: "🎀", rarity: "common" },
-    { id: 10, name: "Phiếu giảm giá 10%", emoji: "🏷️", rarity: "common" }
+// ===== Prize List (Default - will be overridden by Firebase) =====
+let PRIZES = [
+    { id: 1, name: "Voucher 500K", emoji: "💰" },
+    { id: 2, name: "Voucher 200K", emoji: "💵" },
+    { id: 3, name: "Voucher 100K", emoji: "💸" }
 ];
+
+// Dynamic prizes loaded from Firebase
+let dynamicPrizes = [];
 
 // ===== Initialize =====
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,9 +26,45 @@ document.addEventListener('DOMContentLoaded', () => {
     CONFIG.COUNTER_KEY = `prizes-${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
 
     createParticles();
-    initializePrizeTimes();
-    updateUI();
+
+    // Load prizes from Firebase, then initialize
+    setTimeout(async () => {
+        await loadPrizesFromFirebase();
+        initializePrizeTimes();
+        updateUI();
+    }, 800);
 });
+
+// Load prizes from Firebase
+async function loadPrizesFromFirebase() {
+    if (database) {
+        try {
+            const snapshot = await database.ref('prizes').once('value');
+            const data = snapshot.val();
+            if (data) {
+                dynamicPrizes = [];
+                Object.entries(data).forEach(([key, prize]) => {
+                    // Add prize multiple times based on quantity
+                    for (let i = 0; i < (prize.quantity || 1); i++) {
+                        dynamicPrizes.push({
+                            id: dynamicPrizes.length + 1,
+                            name: prize.name,
+                            emoji: prize.emoji || '🎁',
+                            key: key
+                        });
+                    }
+                });
+                if (dynamicPrizes.length > 0) {
+                    PRIZES = dynamicPrizes;
+                    CONFIG.TOTAL_PRIZES = dynamicPrizes.length;
+                    console.log('✅ Loaded', PRIZES.length, 'prizes from Firebase');
+                }
+            }
+        } catch (error) {
+            console.error('Load prizes error:', error);
+        }
+    }
+}
 
 // ===== Particle Background =====
 function createParticles() {
@@ -427,7 +459,7 @@ async function tryGetPrize() {
             await savePlayHistory(phone, false);
 
             const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
-            showResult(false, null, "Chưa trúng! 😅", `Hên xui mà! Cảm ơn bạn đã tham gia! 🍀`);
+            showResult(false, null, "Chúc bạn may mắn lần sau! 🍀", "Cảm ơn bạn đã tham gia!");
 
             // Disable input - can't try again with same phone
             if (phoneInput) phoneInput.disabled = true;
