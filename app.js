@@ -89,34 +89,85 @@ function initializePrizeTimes() {
     }));
 }
 
-// ===== CountAPI Functions =====
-async function getClaimedCount() {
+// ===== Firebase Configuration =====
+// Free Firebase project - syncs prize count across ALL devices in real-time!
+const firebaseConfig = {
+    apiKey: "AIzaSyDemo-Key-Replace-With-Your-Own",
+    authDomain: "vicake-qr.firebaseapp.com",
+    databaseURL: "https://vicake-qr-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "vicake-qr",
+    storageBucket: "vicake-qr.appspot.com",
+    messagingSenderId: "123456789",
+    appId: "1:123456789:web:abcdef123456"
+};
+
+// Initialize Firebase
+let firebaseApp = null;
+let database = null;
+let prizeCounterRef = null;
+
+function initFirebase() {
     try {
-        const response = await fetch(`https://api.countapi.xyz/get/${CONFIG.COUNTER_NAMESPACE}/${CONFIG.COUNTER_KEY}`);
-        const data = await response.json();
-        return data.value || 0;
+        if (typeof firebase !== 'undefined') {
+            firebaseApp = firebase.initializeApp(firebaseConfig);
+            database = firebase.database();
+            prizeCounterRef = database.ref('counters/' + CONFIG.COUNTER_KEY);
+
+            // Listen for real-time updates from other devices
+            prizeCounterRef.on('value', (snapshot) => {
+                const count = snapshot.val() || 0;
+                localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, count);
+                updateUI();
+            });
+
+            console.log('✅ Firebase connected - Đồng bộ realtime!');
+        } else {
+            console.warn('⚠️ Firebase not loaded, using localStorage fallback');
+        }
     } catch (error) {
-        console.error('Error getting count:', error);
-        // Fallback to localStorage
-        return parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0');
+        console.error('Firebase init error:', error);
     }
 }
 
-async function incrementClaimedCount() {
-    try {
-        const response = await fetch(`https://api.countapi.xyz/hit/${CONFIG.COUNTER_NAMESPACE}/${CONFIG.COUNTER_KEY}`);
-        const data = await response.json();
-        // Also save to localStorage as backup
-        localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, data.value);
-        return data.value;
-    } catch (error) {
-        console.error('Error incrementing count:', error);
-        // Fallback to localStorage
-        let count = parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0');
-        count++;
-        localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, count);
-        return count;
+// Initialize Firebase on load
+document.addEventListener('DOMContentLoaded', initFirebase);
+
+async function getClaimedCount() {
+    // Try Firebase first, fallback to localStorage
+    if (prizeCounterRef) {
+        try {
+            const snapshot = await prizeCounterRef.once('value');
+            return snapshot.val() || 0;
+        } catch (error) {
+            console.error('Firebase read error:', error);
+        }
     }
+    return parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0');
+}
+
+async function incrementClaimedCount() {
+    let newCount = 0;
+
+    if (prizeCounterRef) {
+        try {
+            // Use Firebase transaction for atomic increment
+            await prizeCounterRef.transaction((currentCount) => {
+                newCount = (currentCount || 0) + 1;
+                return newCount;
+            });
+        } catch (error) {
+            console.error('Firebase write error:', error);
+            // Fallback to localStorage
+            newCount = parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0') + 1;
+            localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, newCount);
+        }
+    } else {
+        // localStorage fallback
+        newCount = parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0') + 1;
+        localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, newCount);
+    }
+
+    return newCount;
 }
 
 // Check if current device already WON (ever, not just today)
