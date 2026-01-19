@@ -804,33 +804,79 @@ body::before {
 
 /* ===== Responsive ===== */
 @media (max-width: 480px) {
+    .container {
+        padding: 10px;
+    }
+
     .main-content {
-        padding: 50px 25px 40px;
-        border-radius: 35px;
+        padding: 40px 20px 30px;
+        border-radius: 30px;
+        margin: 10px;
     }
 
     .main-content::before {
         font-size: 18px;
         letter-spacing: 5px;
+        padding: 3px 15px;
+        width: 80%;
     }
 
     .logo {
-        font-size: 80px;
+        font-size: 70px;
     }
 
     .title {
-        font-size: 1.7rem;
+        font-size: 1.6rem;
+    }
+
+    .subtitle {
+        font-size: 0.9rem;
+    }
+
+    .prize-counter {
+        padding: 15px;
+        gap: 5px;
+    }
+
+    .counter-value {
+        font-size: 2rem;
     }
 
     .spin-button {
-        padding: 18px 40px;
+        padding: 18px 0;
+        width: 100%;
         font-size: 1.1rem;
+        display: flex;
+        justify-content: center;
+    }
+
+    .phone-input-container input {
+        font-size: 1rem;
+        padding: 12px;
+        width: 100%;
     }
 
     .result-box {
-        padding: 40px 25px;
+        padding: 30px 20px;
+        width: 90vw;
         min-width: auto;
-        width: 90%;
+        border-radius: 25px;
+    }
+
+    .result-icon {
+        font-size: 70px;
+    }
+
+    .result-title {
+        font-size: 1.5rem;
+    }
+
+    .result-message {
+        font-size: 0.9rem;
+    }
+
+    .prize-name {
+        font-size: 1.3rem;
     }
 
     .prize-counter::before,
