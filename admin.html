@@ -35,6 +35,32 @@
                 <div class="stat-value" id="remainingPrizes">10</div>
                 <div class="stat-label">Còn lại</div>
             </div>
+            <div class="stat-card">
+                <div class="stat-value" id="winRateDisplay">50%</div>
+                <div class="stat-label">Tỷ lệ trúng</div>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="prize-list" style="margin-bottom: 30px;">
+            <h3>🎛️ Cài Đặt</h3>
+            <div style="padding: 15px 0;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                    Số lượng giải thưởng: <span id="totalPrizesValue">10</span>
+                </label>
+                <input type="range" id="totalPrizesSlider" min="1" max="50" value="10"
+                    style="width: 100%; accent-color: var(--primary-pink);" onchange="updateTotalPrizes(this.value)">
+            </div>
+            <div style="padding: 15px 0; border-top: 1px solid var(--soft-pink);">
+                <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                    Tỷ lệ trúng thưởng: <span id="winRateValue">50</span>%
+                </label>
+                <input type="range" id="winRateSlider" min="0" max="100" value="50"
+                    style="width: 100%; accent-color: var(--primary-pink);" onchange="updateWinRate(this.value)">
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()" style="margin-top: 15px; width: 100%;">
+                💾 Lưu cài đặt
+            </button>
         </div>
 
         <!-- QR Code Section -->
@@ -55,6 +81,14 @@
             </div>
         </div>
 
+        <!-- History Section -->
+        <div class="prize-list" style="margin-bottom: 30px;">
+            <h3>📜 Lịch Sử Tham Gia</h3>
+            <div id="historyContainer" style="max-height: 300px; overflow-y: auto;">
+                <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
+            </div>
+        </div>
+
         <!-- Action Buttons -->
         <div class="action-buttons">
             <button class="btn btn-primary" onclick="refreshData()">
@@ -65,6 +99,9 @@
             </button>
             <button class="btn btn-success" onclick="setPrizeCount()">
                 ⚙️ Đặt số lượng
+            </button>
+            <button class="btn btn-danger" onclick="clearHistory()">
+                🗑️ Xóa lịch sử
             </button>
         </div>
     </div>
@@ -162,6 +199,71 @@
 
         // Auto refresh every 10 seconds
         setInterval(loadAdminData, 10000);
+        setInterval(loadHistory, 10000);
+
+        // Load history
+        async function loadHistory() {
+            const container = document.getElementById('historyContainer');
+            if (!container) return;
+
+            try {
+                if (typeof firebase !== 'undefined' && firebase.database) {
+                    const snapshot = await firebase.database().ref('history').orderByChild('time').limitToLast(50).once('value');
+                    const data = snapshot.val();
+
+                    if (!data) {
+                        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có lịch sử</p>';
+                        return;
+                    }
+
+                    // Convert to array and sort by time desc
+                    const entries = Object.entries(data).map(([key, val]) => ({ ...val, key }));
+                    entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+                    container.innerHTML = entries.map(entry => {
+                        const time = new Date(entry.time).toLocaleString('vi-VN');
+                        const status = entry.won ? '🎉 Trúng' : '😅 Trượt';
+                        const prize = entry.prize || '-';
+                        const statusClass = entry.won ? 'available' : 'expired';
+                        return `
+                            <div class="prize-item" style="margin-bottom: 8px;">
+                                <div class="prize-info">
+                                    <span class="prize-emoji">📱</span>
+                                    <div class="prize-details">
+                                        <div class="prize-title">${entry.phone}</div>
+                                        <div class="prize-time">${time}</div>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span class="prize-status ${statusClass}">${status}</span>
+                                    ${entry.prize ? `<div style="font-size: 0.8rem; color: var(--text-secondary);">${prize}</div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Load history error:', error);
+                container.innerHTML = '<p style="color: #f45c43;">Lỗi tải lịch sử</p>';
+            }
+        }
+
+        // Clear history
+        window.clearHistory = async function () {
+            if (confirm('⚠️ Xóa toàn bộ lịch sử tham gia?\n\nĐiều này sẽ cho phép tất cả SĐT chơi lại.')) {
+                try {
+                    await firebase.database().ref('history').remove();
+                    await firebase.database().ref('playedPhones').remove();
+                    alert('✅ Đã xóa lịch sử!');
+                    location.reload();
+                } catch (error) {
+                    alert('❌ Lỗi: ' + error.message);
+                }
+            }
+        };
+
+        // Load history on init
+        setTimeout(loadHistory, 800);
     </script>
 </body>
 

@@ -1,12 +1,12 @@
 // ===== Configuration =====
 const CONFIG = {
     TOTAL_PRIZES: 10,
-    DAY_START_HOUR: 8,  // 8 AM
-    DAY_END_HOUR: 18,   // 6 PM
+    WIN_RATE: 0.5,        // 50% chance to win (0.0 - 1.0)
+    DAY_START_HOUR: 8,    // 8 AM
+    DAY_END_HOUR: 18,     // 6 PM
     STORAGE_KEY: 'qr_reward_system',
-    // CountAPI namespace - unique for your app
     COUNTER_NAMESPACE: 'vicake-qr',
-    COUNTER_KEY: null // Will be set based on today's date
+    COUNTER_KEY: null     // Will be set based on today's date
 };
 
 // ===== Prize List =====
@@ -180,10 +180,82 @@ function markDeviceWon() {
     localStorage.setItem('device_has_won', 'true');
 }
 
-// Random 50% chance
+// Random chance based on WIN_RATE setting
 function rollLucky() {
-    return Math.random() < 0.5; // 50% chance to win
+    return Math.random() < CONFIG.WIN_RATE;
 }
+
+// ===== Settings Functions =====
+let settingsRef = null;
+
+async function loadSettings() {
+    if (database) {
+        settingsRef = database.ref('settings');
+
+        // Listen for settings changes
+        settingsRef.on('value', (snapshot) => {
+            const settings = snapshot.val();
+            if (settings) {
+                if (settings.totalPrizes) CONFIG.TOTAL_PRIZES = settings.totalPrizes;
+                if (settings.winRate !== undefined) CONFIG.WIN_RATE = settings.winRate / 100;
+                updateSettingsUI();
+                updateUI();
+            }
+        });
+    }
+}
+
+function updateSettingsUI() {
+    // Update sliders if on admin page
+    const totalSlider = document.getElementById('totalPrizesSlider');
+    const rateSlider = document.getElementById('winRateSlider');
+    const totalValue = document.getElementById('totalPrizesValue');
+    const rateValue = document.getElementById('winRateValue');
+    const rateDisplay = document.getElementById('winRateDisplay');
+
+    if (totalSlider) totalSlider.value = CONFIG.TOTAL_PRIZES;
+    if (rateSlider) rateSlider.value = CONFIG.WIN_RATE * 100;
+    if (totalValue) totalValue.textContent = CONFIG.TOTAL_PRIZES;
+    if (rateValue) rateValue.textContent = Math.round(CONFIG.WIN_RATE * 100);
+    if (rateDisplay) rateDisplay.textContent = Math.round(CONFIG.WIN_RATE * 100) + '%';
+}
+
+window.updateTotalPrizes = function (value) {
+    document.getElementById('totalPrizesValue').textContent = value;
+};
+
+window.updateWinRate = function (value) {
+    document.getElementById('winRateValue').textContent = value;
+};
+
+window.saveSettings = async function () {
+    const totalPrizes = parseInt(document.getElementById('totalPrizesSlider').value);
+    const winRate = parseInt(document.getElementById('winRateSlider').value);
+
+    try {
+        if (settingsRef) {
+            await settingsRef.set({
+                totalPrizes: totalPrizes,
+                winRate: winRate
+            });
+        }
+
+        // Also save locally
+        CONFIG.TOTAL_PRIZES = totalPrizes;
+        CONFIG.WIN_RATE = winRate / 100;
+
+        alert(`✅ Đã lưu!\n- Số quà: ${totalPrizes}\n- Tỷ lệ trúng: ${winRate}%`);
+        location.reload();
+    } catch (error) {
+        console.error('Save settings error:', error);
+        alert('❌ Lỗi: ' + error.message);
+    }
+};
+
+// Load settings on init
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(loadSettings, 600);
+});
 
 // ===== UI Updates =====
 async function updateUI() {
@@ -216,30 +288,125 @@ async function updateUI() {
     }
 }
 
+// ===== Phone Validation & History =====
+let historyRef = null;
+let playedPhonesRef = null;
+
+function initPhoneTracking() {
+    if (database) {
+        historyRef = database.ref('history');
+        playedPhonesRef = database.ref('playedPhones');
+    }
+}
+
+// Initialize on load
+document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(initPhoneTracking, 700);
+});
+
+// Format phone number as user types
+window.formatPhone = function (input) {
+    let value = input.value.replace(/\D/g, '');
+    if (value.length > 10) value = value.substring(0, 10);
+    input.value = value;
+};
+
+// Validate phone number
+function isValidPhone(phone) {
+    const cleaned = phone.replace(/\D/g, '');
+    return cleaned.length === 10 && cleaned.startsWith('0');
+}
+
+// Check if phone has already played
+async function hasPhonePlayed(phone) {
+    const cleaned = phone.replace(/\D/g, '');
+    if (playedPhonesRef) {
+        try {
+            const snapshot = await playedPhonesRef.child(cleaned).once('value');
+            return snapshot.exists();
+        } catch (error) {
+            console.error('Check phone error:', error);
+        }
+    }
+    return false;
+}
+
+// Save play to history
+async function savePlayHistory(phone, won, prize = null) {
+    const cleaned = phone.replace(/\D/g, '');
+    const record = {
+        phone: cleaned,
+        time: new Date().toISOString(),
+        won: won,
+        prize: prize ? prize.name : null
+    };
+
+    if (historyRef) {
+        try {
+            await historyRef.push(record);
+            await playedPhonesRef.child(cleaned).set({
+                playedAt: record.time,
+                won: won
+            });
+        } catch (error) {
+            console.error('Save history error:', error);
+        }
+    }
+}
+
+// Show phone error
+function showPhoneError(message) {
+    const errorEl = document.getElementById('phoneError');
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+    }
+}
+
+function hidePhoneError() {
+    const errorEl = document.getElementById('phoneError');
+    if (errorEl) {
+        errorEl.style.display = 'none';
+    }
+}
+
 // ===== Prize Logic =====
 async function tryGetPrize() {
     const spinBtn = document.getElementById('spinBtn');
+    const phoneInput = document.getElementById('phoneInput');
+    const phone = phoneInput ? phoneInput.value : '';
+
+    hidePhoneError();
+
+    // Validate phone
+    if (!phone || !isValidPhone(phone)) {
+        showPhoneError('⚠️ Vui lòng nhập số điện thoại hợp lệ (10 số, bắt đầu bằng 0)');
+        return;
+    }
+
+    // Check if phone already played
+    const alreadyPlayed = await hasPhonePlayed(phone);
+    if (alreadyPlayed) {
+        showPhoneError('📱 Số điện thoại này đã tham gia rồi!');
+        return;
+    }
+
     if (spinBtn) {
         spinBtn.disabled = true;
         spinBtn.querySelector('.button-text').textContent = 'ĐANG QUAY SỐ...';
     }
 
     try {
-        // Check if device already won before
-        if (hasDeviceWon()) {
-            showResult(false, null, "Bạn đã trúng thưởng rồi!", "Mỗi thiết bị chỉ được trúng 1 lần duy nhất. Cảm ơn bạn đã tham gia! 🎉");
-            return;
-        }
-
         const claimedCount = await getClaimedCount();
 
         // Check if all prizes are claimed
         if (claimedCount >= CONFIG.TOTAL_PRIZES) {
             showResult(false, null, "Đã hết giải thưởng!", "Tất cả giải thưởng đã được phát hết. Chúc may mắn lần sau! 🍀");
+            await savePlayHistory(phone, false);
             return;
         }
 
-        // 🎲 RANDOM 50% CHANCE!
+        // 🎲 RANDOM CHANCE!
         const isLucky = rollLucky();
 
         if (isLucky) {
@@ -248,21 +415,22 @@ async function tryGetPrize() {
             const randomPrize = remainingPrizes[Math.floor(Math.random() * remainingPrizes.length)];
 
             await incrementClaimedCount();
-            markDeviceWon();
+            await savePlayHistory(phone, true, randomPrize);
 
             showResult(true, randomPrize, "🎊 CHÚC MỪNG! 🎊", "Bạn đã trúng thưởng:");
             createConfetti();
-        } else {
-            // Not lucky this time
-            const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
-            showResult(false, null, "Chưa trúng! 😅", `Hên xui mà! Còn ${remaining} giải thưởng. Bạn có thể thử lại! 🍀`);
 
-            // Re-enable button for another try
-            if (spinBtn) {
-                spinBtn.disabled = false;
-                spinBtn.querySelector('.button-text').textContent = 'THỬ LẠI 🎰';
-            }
-            return; // Don't update UI to keep button enabled
+            // Disable input after win
+            if (phoneInput) phoneInput.disabled = true;
+        } else {
+            // Not lucky - still save to history so they can't play again
+            await savePlayHistory(phone, false);
+
+            const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
+            showResult(false, null, "Chưa trúng! 😅", `Hên xui mà! Cảm ơn bạn đã tham gia! 🍀`);
+
+            // Disable input - can't try again with same phone
+            if (phoneInput) phoneInput.disabled = true;
         }
     } finally {
         await updateUI();

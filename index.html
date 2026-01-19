@@ -29,6 +29,19 @@
                 <span class="counter-total">/ 10</span>
             </div>
 
+            <!-- Phone Input -->
+            <div class="phone-input-section">
+                <label for="phoneInput"
+                    style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-secondary);">
+                    📱 Nhập số điện thoại để tham gia:
+                </label>
+                <input type="tel" id="phoneInput" placeholder="0912 345 678" maxlength="12"
+                    style="width: 100%; padding: 15px 20px; border: 2px solid var(--soft-pink); border-radius: 25px; font-size: 1.1rem; text-align: center; font-family: inherit; background: white; color: var(--text-primary); outline: none; transition: border-color 0.3s;"
+                    onfocus="this.style.borderColor='var(--primary-pink)'"
+                    onblur="this.style.borderColor='var(--soft-pink)'" oninput="formatPhone(this)">
+                <p id="phoneError" style="color: #ff4757; font-size: 0.85rem; margin-top: 8px; display: none;"></p>
+            </div>
+
             <!-- Spin Button -->
             <button class="spin-button" id="spinBtn" onclick="tryGetPrize()">
                 <span class="button-icon">🎂</span>
