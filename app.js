@@ -595,11 +595,14 @@ window.clearMyWinStatus = function () {
 
 window.getRewardData = async function () {
     const claimedCount = await getClaimedCount();
+    const currentPrizes = window.prizeTimes || [];
+    const total = currentPrizes.length > 0 ? currentPrizes.length : CONFIG.TOTAL_PRIZES;
+
     return {
         date: new Date().toDateString(),
-        totalPrizes: CONFIG.TOTAL_PRIZES,
+        totalPrizes: total,
         claimedCount: claimedCount,
-        prizes: (window.prizeTimes || []).map((prize, index) => ({
+        prizes: currentPrizes.map((prize, index) => ({
             ...prize,
             claimed: index < claimedCount
         }))

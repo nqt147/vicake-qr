@@ -323,6 +323,21 @@
                 const total = prizes.reduce((sum, p) => sum + (p.quantity || 1), 0);
                 if (countEl) countEl.textContent = total;
 
+                // Also update Main Stats
+                const totalStatsEl = document.getElementById('totalPrizes');
+                const remainingStatsEl = document.getElementById('remainingPrizes');
+                const claimedStatsEl = document.getElementById('claimedPrizes');
+
+                if (totalStatsEl) totalStatsEl.textContent = total;
+
+                // Get current claimed count for accurate remaining calculation
+                if (typeof getClaimedCount === 'function' && remainingStatsEl && claimedStatsEl) {
+                    getClaimedCount().then(claimed => {
+                        claimedStatsEl.textContent = claimed;
+                        remainingStatsEl.textContent = Math.max(0, total - claimed);
+                    });
+                }
+
                 container.innerHTML = prizes.map(prize => `
                     <div class="prize-item" style="margin-bottom: 8px;">
                         <div class="prize-info">
