@@ -341,14 +341,57 @@ function createConfetti() {
 
 // ===== Admin Functions (exposed globally) =====
 window.resetAllPrizes = async function () {
-    if (confirm('Bạn có chắc muốn reset tất cả giải thưởng?')) {
-        // Note: CountAPI doesn't support reset, so we change the key
-        const newKey = CONFIG.COUNTER_KEY + '-reset-' + Date.now();
-        CONFIG.COUNTER_KEY = newKey;
-        localStorage.removeItem('user_claimed_date');
-        alert('Đã reset thành công! Trang sẽ được tải lại.');
-        location.reload();
+    if (confirm('⚠️ Reset tất cả giải thưởng về 0?\n\nĐiều này sẽ:\n- Đặt số quà đã phát = 0\n- Xóa trạng thái trúng của device này')) {
+        try {
+            // Reset Firebase counter to 0
+            if (prizeCounterRef) {
+                await prizeCounterRef.set(0);
+            }
+            // Reset localStorage
+            localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, '0');
+            localStorage.removeItem('device_has_won');
+
+            alert('✅ Đã reset thành công!');
+            location.reload();
+        } catch (error) {
+            console.error('Reset error:', error);
+            alert('❌ Lỗi reset: ' + error.message);
+        }
     }
+};
+
+window.setPrizeCount = async function () {
+    const currentCount = await getClaimedCount();
+    const newCount = prompt(`Nhập số quà ĐÃ PHÁT (hiện tại: ${currentCount}):\n\n(Nhập 0-${CONFIG.TOTAL_PRIZES})`, currentCount);
+
+    if (newCount !== null) {
+        const count = parseInt(newCount);
+        if (isNaN(count) || count < 0 || count > CONFIG.TOTAL_PRIZES) {
+            alert('❌ Số không hợp lệ! Nhập từ 0 đến ' + CONFIG.TOTAL_PRIZES);
+            return;
+        }
+
+        try {
+            // Set Firebase counter
+            if (prizeCounterRef) {
+                await prizeCounterRef.set(count);
+            }
+            // Set localStorage
+            localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, count);
+
+            alert(`✅ Đã đặt số quà đã phát = ${count}`);
+            location.reload();
+        } catch (error) {
+            console.error('Set count error:', error);
+            alert('❌ Lỗi: ' + error.message);
+        }
+    }
+};
+
+window.clearMyWinStatus = function () {
+    localStorage.removeItem('device_has_won');
+    alert('✅ Đã xóa trạng thái trúng của device này!');
+    location.reload();
 };
 
 window.getRewardData = async function () {
@@ -366,3 +409,4 @@ window.getRewardData = async function () {
 
 window.getClaimedCount = getClaimedCount;
 window.CONFIG = CONFIG;
+
