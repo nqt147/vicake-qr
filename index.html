@@ -3,59 +3,61 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tiệm Bánh Vicake - Nhận Thưởng</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <meta name="theme-color" content="#fff0f5">
 </head>
 
 <body>
-    <div class="container">
-        <!-- Particles Background -->
-        <div class="particles" id="particles"></div>
+    <!-- Particles Background -->
+    <div class="particles" id="particles"></div>
 
-        <!-- Main Content -->
+    <div class="container">
+        <!-- Main 'Clay' Card -->
         <div class="main-content">
             <div class="logo">🧁</div>
-            <h1 class="title">Chúc xuân an lành - Chạm quà may măn</h1>
-            <!-- Prize Counter (Hidden) -->
+
+            <h1 class="title">Lì Xì<br>Xuân 2026 🧧</h1>
+
+            <p style="margin-bottom: 25px; color: var(--clay-text); opacity: 0.8; font-weight: 600;">
+                Nhập số điện thoại để nhận quà<br>từ Tiệm Bánh Vicake
+            </p>
+
+            <!-- Prize Counter (Hidden/Optional) -->
             <div class="prize-counter" style="display: none;">
-                <span class="counter-label">Giải thưởng còn lại:</span>
                 <span class="counter-value" id="prizeCount">...</span>
-                <span class="counter-total">/ <span id="prizeTotal">...</span></span>
             </div>
 
-            <!-- Phone Input -->
+            <!-- Phone Input - Pill Shaped -->
             <div class="phone-input-section">
-                <label for="phoneInput"
-                    style="display: block; margin-bottom: 8px; font-weight: 600; color: var(--text-secondary);">
-                    📱 Nhập số điện thoại để tham gia:
-                </label>
-                <input type="tel" id="phoneInput" placeholder="0912 345 678" maxlength="12"
-                    style="width: 100%; padding: 15px 20px; border: 2px solid var(--soft-pink); border-radius: 25px; font-size: 1.1rem; text-align: center; font-family: inherit; background: white; color: var(--text-primary); outline: none; transition: border-color 0.3s;"
-                    onfocus="this.style.borderColor='var(--primary-pink)'"
-                    onblur="this.style.borderColor='var(--soft-pink)'" oninput="formatPhone(this)">
-                <p id="phoneError" style="color: #ff4757; font-size: 0.85rem; margin-top: 8px; display: none;"></p>
+                <input type="tel" id="phoneInput" placeholder="09xx..." maxlength="12" oninput="formatPhone(this)"
+                    autocomplete="tel">
+                <p id="phoneError" style="display: none;"></p>
             </div>
 
-            <!-- Spin Button -->
+            <!-- Spin Button - Bouncy -->
             <button class="spin-button" id="spinBtn" onclick="tryGetPrize()">
-                <span class="button-icon">🎂</span>
-                <span class="button-text">THỬ VẬN MAY</span>
+                <span class="button-text">MỞ QUÀ NGAY 🎁</span>
             </button>
 
-            <!-- Result Box (hidden by default) -->
-            <div class="result-box hidden" id="resultBox">
-                <div class="result-icon" id="resultIcon">🎉</div>
-                <div class="result-title" id="resultTitle">Chúc mừng!</div>
-                <div class="result-message" id="resultMessage">Bạn đã nhận được giải thưởng!</div>
-                <div class="prize-name" id="prizeName">iPhone 15 Pro Max</div>
-                <button class="close-btn" onclick="closeResult()">Đóng</button>
+            <div style="margin-top: 20px; font-size: 0.8rem; opacity: 0.6; font-style: italic;">
+                Chúc bạn một năm mới ngọt ngào!
             </div>
+        </div>
+    </div>
 
-            <!-- Admin: /admin.html -->
+    <!-- Result Box (Clay Modal) -->
+    <div class="overlay" id="overlay">
+        <div class="result-box hidden" id="resultBox">
+            <div class="result-icon" id="resultIcon">🎉</div>
+            <div class="result-title" id="resultTitle">Chúc mừng!</div>
+            <div class="result-message" id="resultMessage">Bạn đã nhận được giải thưởng!</div>
+            <div class="prize-name" id="prizeName">...</div>
+            <button class="close-btn" onclick="closeResult()">NHẬN QUÀ</button>
         </div>
     </div>
 
@@ -63,6 +65,15 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="app.js"></script>
+
+    <script>
+        // Force mobile height fix
+        const setHeight = () => {
+            document.documentElement.style.setProperty('--vh', `${window.innerHeight * 0.01}px`);
+        };
+        window.addEventListener('resize', setHeight);
+        setHeight();
+    </script>
 </body>
 
 </html>
