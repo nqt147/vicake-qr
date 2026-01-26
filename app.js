@@ -331,7 +331,7 @@ async function tryGetPrize() {
 
         // 2. Check Global Stock
         if (CONFIG.REMAINING_PRIZES <= 0) {
-            showResult(false, null, "Đã hết giải thưởng!", "Tất cả giải thưởng đã được phát hết. Chúc may mắn lần sau! 🍀");
+            showResult(false, null, "Đã hết giải thưởng!", "Tất cả giải thưởng đã được phát hết. Chúc bạn năm mới vui vẻ! 🥳");
             await savePlayHistory(phone, false);
             return;
         }
@@ -358,7 +358,7 @@ async function tryGetPrize() {
 
         // If unlucky OR if attemptToClaimRandomPrize failed (race condition/out of stock during spin)
         await savePlayHistory(phone, false);
-        showResult(false, null, "Chúc bạn may mắn lần sau! 🍀", "Cảm ơn bạn đã tham gia!");
+        showResult(false, null, "chúc bạn năm mới vui vẻ! 🥳", "Cảm ơn bạn đã tham gia!");
         if (phoneInput) phoneInput.disabled = true;
 
     } catch (e) {
