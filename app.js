@@ -436,7 +436,7 @@ function showResult(isWin, prize, title, message) {
         prizeName.textContent = prize.name;
         prizeName.style.display = 'block';
     } else {
-        resultIcon.textContent = "😔";
+        resultIcon.textContent = "🍀";
         resultTitle.textContent = title;
         resultTitle.className = 'result-title fail';
         resultMessage.textContent = message;
