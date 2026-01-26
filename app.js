@@ -1,69 +1,62 @@
 // ===== Configuration =====
 const CONFIG = {
-    TOTAL_PRIZES: 10,
+    TOTAL_PRIZES: 0,      // Calculated dynamically
+    REMAINING_PRIZES: 0,  // Calculated dynamically
     WIN_RATE: 0.5,        // 50% chance to win (0.0 - 1.0)
-    DAY_START_HOUR: 8,    // 8 AM
-    DAY_END_HOUR: 18,     // 6 PM
-    STORAGE_KEY: 'qr_reward_system',
-    COUNTER_NAMESPACE: 'vicake-qr',
-    COUNTER_KEY: null     // Will be set based on today's date
+    STORAGE_KEY: 'qr_reward_system'
 };
 
-// ===== Prize List (Default - will be overridden by Firebase) =====
-let PRIZES = [
-    { id: 1, name: "Voucher 500K", emoji: "💰" },
-    { id: 2, name: "Voucher 200K", emoji: "💵" },
-    { id: 3, name: "Voucher 100K", emoji: "💸" }
-];
-
-// Dynamic prizes loaded from Firebase
-let dynamicPrizes = [];
+// ===== Prize List =====
+let PRIZES = []; // List of prize types { key, name, quantity, emoji }
 
 // ===== Initialize =====
 document.addEventListener('DOMContentLoaded', () => {
-    // Set counter key based on today's date (resets daily)
-    const today = new Date();
-    CONFIG.COUNTER_KEY = `prizes-${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-
     createParticles();
 
     // Load prizes from Firebase, then initialize
     setTimeout(async () => {
         await loadPrizesFromFirebase();
-        initializePrizeTimes();
         updateUI();
     }, 800);
 });
 
-// Load prizes from Firebase
-async function loadPrizesFromFirebase() {
-    if (database) {
-        try {
-            const snapshot = await database.ref('prizes').once('value');
-            const data = snapshot.val();
-            if (data) {
-                dynamicPrizes = [];
-                Object.entries(data).forEach(([key, prize]) => {
-                    // Add prize multiple times based on quantity
-                    for (let i = 0; i < (prize.quantity || 1); i++) {
-                        dynamicPrizes.push({
-                            id: dynamicPrizes.length + 1,
-                            name: prize.name,
-                            emoji: prize.emoji || '🎁',
-                            key: key
+// Load prizes from Firebase (Realtime Listener)
+function loadPrizesFromFirebase() {
+    return new Promise((resolve) => {
+        if (database) {
+            try {
+                const prizesRef = database.ref('prizes');
+                prizesRef.on('value', (snapshot) => {
+                    const data = snapshot.val();
+                    PRIZES = [];
+                    let totalQty = 0;
+
+                    if (data) {
+                        Object.entries(data).forEach(([key, prize]) => {
+                            PRIZES.push({
+                                ...prize,
+                                key: key
+                            });
+                            totalQty += (prize.quantity || 0);
                         });
                     }
+
+                    CONFIG.REMAINING_PRIZES = totalQty;
+                    // Note: We don't track "Original Total" easily unless we store "initialQuantity"
+                    // For now, we just show what's available.
+
+                    console.log('✅ Updated Prize Pool:', PRIZES.length, 'types,', totalQty, 'items total');
+                    updateUI();
+                    resolve();
                 });
-                if (dynamicPrizes.length > 0) {
-                    PRIZES = dynamicPrizes;
-                    CONFIG.TOTAL_PRIZES = dynamicPrizes.length;
-                    console.log('✅ Loaded', PRIZES.length, 'prizes from Firebase');
-                }
+            } catch (error) {
+                console.error('Load prizes error:', error);
+                resolve();
             }
-        } catch (error) {
-            console.error('Load prizes error:', error);
+        } else {
+            resolve();
         }
-    }
+    });
 }
 
 // ===== Particle Background =====
@@ -83,44 +76,6 @@ function createParticles() {
     }
 }
 
-// ===== Seeded Random Number Generator =====
-// Same seed = same random numbers = same prize times for everyone
-function seededRandom(seed) {
-    const x = Math.sin(seed++) * 10000;
-    return x - Math.floor(x);
-}
-
-// ===== Generate Prize Times (Deterministic) =====
-function generatePrizeTimes() {
-    const today = new Date();
-    // Seed based on date - everyone gets same times
-    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate();
-
-    const times = [];
-    for (let i = 0; i < CONFIG.TOTAL_PRIZES; i++) {
-        const randomValue = seededRandom(seed + i);
-        const randomHour = CONFIG.DAY_START_HOUR + randomValue * (CONFIG.DAY_END_HOUR - CONFIG.DAY_START_HOUR);
-        const hours = Math.floor(randomHour);
-        const minutes = Math.floor((randomHour - hours) * 60);
-
-        const time = new Date(today);
-        time.setHours(hours, minutes, 0, 0);
-        times.push(time.getTime());
-    }
-
-    // Sort times chronologically
-    times.sort((a, b) => a - b);
-    return times;
-}
-
-function initializePrizeTimes() {
-    const times = generatePrizeTimes();
-    window.prizeTimes = times.map((time, index) => ({
-        ...PRIZES[index],
-        availableAt: time
-    }));
-}
-
 // ===== Firebase Configuration =====
 // Free Firebase project - syncs prize count across ALL devices in real-time!
 const firebaseConfig = {
@@ -137,25 +92,15 @@ const firebaseConfig = {
 // Initialize Firebase
 let firebaseApp = null;
 let database = null;
-let prizeCounterRef = null;
 
 function initFirebase() {
     try {
         if (typeof firebase !== 'undefined') {
             firebaseApp = firebase.initializeApp(firebaseConfig);
             database = firebase.database();
-            prizeCounterRef = database.ref('counters/' + CONFIG.COUNTER_KEY);
-
-            // Listen for real-time updates from other devices
-            prizeCounterRef.on('value', (snapshot) => {
-                const count = snapshot.val() || 0;
-                localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, count);
-                updateUI();
-            });
-
-            console.log('✅ Firebase connected - Đồng bộ realtime!');
+            console.log('✅ Firebase connected');
         } else {
-            console.warn('⚠️ Firebase not loaded, using localStorage fallback');
+            console.warn('⚠️ Firebase not loaded');
         }
     } catch (error) {
         console.error('Firebase init error:', error);
@@ -165,45 +110,7 @@ function initFirebase() {
 // Initialize Firebase on load
 document.addEventListener('DOMContentLoaded', initFirebase);
 
-async function getClaimedCount() {
-    // Try Firebase first, fallback to localStorage
-    if (prizeCounterRef) {
-        try {
-            const snapshot = await prizeCounterRef.once('value');
-            return snapshot.val() || 0;
-        } catch (error) {
-            console.error('Firebase read error:', error);
-        }
-    }
-    return parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0');
-}
-
-async function incrementClaimedCount() {
-    let newCount = 0;
-
-    if (prizeCounterRef) {
-        try {
-            // Use Firebase transaction for atomic increment
-            await prizeCounterRef.transaction((currentCount) => {
-                newCount = (currentCount || 0) + 1;
-                return newCount;
-            });
-        } catch (error) {
-            console.error('Firebase write error:', error);
-            // Fallback to localStorage
-            newCount = parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0') + 1;
-            localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, newCount);
-        }
-    } else {
-        // localStorage fallback
-        newCount = parseInt(localStorage.getItem('claimed_count_' + CONFIG.COUNTER_KEY) || '0') + 1;
-        localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, newCount);
-    }
-
-    return newCount;
-}
-
-// Check if current device already WON (ever, not just today)
+// Check if current device already WON
 function hasDeviceWon() {
     return localStorage.getItem('device_has_won') === 'true';
 }
@@ -228,10 +135,8 @@ async function loadSettings() {
         settingsRef.on('value', (snapshot) => {
             const settings = snapshot.val();
             if (settings) {
-                // Only update winRate from settings, totalPrizes is dynamic from prizes list now
                 if (settings.winRate !== undefined) CONFIG.WIN_RATE = settings.winRate / 100;
                 updateSettingsUI();
-                updateUI();
             }
         });
     }
@@ -253,7 +158,6 @@ window.updateWinRate = function (value) {
 };
 
 window.saveSettings = async function () {
-    // Only save Win Rate, Total Prizes is managed by adding/removing prizes
     const winRateSlider = document.getElementById('winRateSlider');
     if (!winRateSlider) return;
 
@@ -265,12 +169,9 @@ window.saveSettings = async function () {
                 winRate: winRate
             });
         }
-
-        // Also save locally
+        // Also save locally logic
         CONFIG.WIN_RATE = winRate / 100;
-
         alert(`✅ Đã lưu tỷ lệ trúng: ${winRate}%`);
-        location.reload();
     } catch (error) {
         console.error('Save settings error:', error);
         alert('❌ Lỗi: ' + error.message);
@@ -283,20 +184,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ===== UI Updates =====
-async function updateUI() {
-    const claimedCount = await getClaimedCount();
+function updateUI() {
     const prizeCountEl = document.getElementById('prizeCount');
-    const prizeTotalEl = document.getElementById('prizeTotal');
+    const prizeTotalEl = document.getElementById('prizeTotal'); // Usually hidden or repurposed
     const spinBtn = document.getElementById('spinBtn');
 
-    if (prizeCountEl) {
-        const remaining = Math.max(0, CONFIG.TOTAL_PRIZES - claimedCount);
-        prizeCountEl.textContent = remaining;
+    // Calculate total remaining
+    const remaining = CONFIG.REMAINING_PRIZES;
 
-        // Update total count display
-        if (prizeTotalEl) {
-            prizeTotalEl.textContent = CONFIG.TOTAL_PRIZES;
-        }
+    if (prizeCountEl) {
+        prizeCountEl.textContent = remaining;
 
         if (remaining === 0) {
             prizeCountEl.classList.add('empty');
@@ -306,15 +203,16 @@ async function updateUI() {
     }
 
     if (spinBtn) {
-        const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
         const deviceWon = hasDeviceWon();
-
         if (remaining <= 0) {
             spinBtn.disabled = true;
             spinBtn.querySelector('.button-text').textContent = 'ĐÃ HẾT THƯỞNG';
         } else if (deviceWon) {
             spinBtn.disabled = true;
             spinBtn.querySelector('.button-text').textContent = 'BẠN ĐÃ TRÚNG THƯỞNG';
+        } else {
+            spinBtn.disabled = false;
+            spinBtn.querySelector('.button-text').textContent = 'QUAY NGAY';
         }
     }
 }
@@ -401,7 +299,7 @@ function hidePhoneError() {
     }
 }
 
-// ===== Prize Logic =====
+// ===== Prize Logic (CORE) =====
 async function tryGetPrize() {
     const spinBtn = document.getElementById('spinBtn');
     const phoneInput = document.getElementById('phoneInput');
@@ -428,43 +326,91 @@ async function tryGetPrize() {
     }
 
     try {
-        const claimedCount = await getClaimedCount();
+        // 1. Refresh prize data cleanly before spin to reduce conflict
+        await new Promise(r => setTimeout(r, 500)); // Fake spin feel
 
-        // Check if all prizes are claimed
-        if (claimedCount >= CONFIG.TOTAL_PRIZES) {
+        // 2. Check Global Stock
+        if (CONFIG.REMAINING_PRIZES <= 0) {
             showResult(false, null, "Đã hết giải thưởng!", "Tất cả giải thưởng đã được phát hết. Chúc may mắn lần sau! 🍀");
             await savePlayHistory(phone, false);
             return;
         }
 
-        // 🎲 RANDOM CHANCE!
+        // 3. Roll for luck
         const isLucky = rollLucky();
 
         if (isLucky) {
-            // Lucky! Get a random prize from remaining
-            const remainingPrizes = window.prizeTimes.filter((_, index) => index >= claimedCount);
-            const randomPrize = remainingPrizes[Math.floor(Math.random() * remainingPrizes.length)];
+            // 4. Try to claim a prize (Transaction)
+            const wonPrize = await attemptToClaimRandomPrize();
 
-            await incrementClaimedCount();
-            await savePlayHistory(phone, true, randomPrize);
+            if (wonPrize) {
+                // Success!
+                await savePlayHistory(phone, true, wonPrize);
+                markDeviceWon();
 
-            showResult(true, randomPrize, "🎊 CHÚC MỪNG! 🎊", "Bạn đã trúng thưởng:");
-            createConfetti();
+                showResult(true, wonPrize, "🎊 CHÚC MỪNG! 🎊", "Bạn đã trúng thưởng:");
+                createConfetti();
 
-            // Disable input after win
-            if (phoneInput) phoneInput.disabled = true;
-        } else {
-            // Not lucky - still save to history so they can't play again
-            await savePlayHistory(phone, false);
-
-            const remaining = CONFIG.TOTAL_PRIZES - claimedCount;
-            showResult(false, null, "Chúc bạn may mắn lần sau! 🍀", "Cảm ơn bạn đã tham gia!");
-
-            // Disable input - can't try again with same phone
-            if (phoneInput) phoneInput.disabled = true;
+                if (phoneInput) phoneInput.disabled = true;
+                return;
+            }
         }
+
+        // If unlucky OR if attemptToClaimRandomPrize failed (race condition/out of stock during spin)
+        await savePlayHistory(phone, false);
+        showResult(false, null, "Chúc bạn may mắn lần sau! 🍀", "Cảm ơn bạn đã tham gia!");
+        if (phoneInput) phoneInput.disabled = true;
+
+    } catch (e) {
+        console.error(e);
+        // Fallback error
+        showResult(false, null, "Lỗi kết nối", "Vui lòng thử lại sau.");
+        if (spinBtn) spinBtn.disabled = false;
     } finally {
-        await updateUI();
+        updateUI();
+    }
+}
+
+// Atomic transaction to try and claim a prize
+async function attemptToClaimRandomPrize() {
+    if (!database) return null;
+
+    // Filter available prizes locally first to pick a target
+    const availablePrizes = PRIZES.filter(p => p.quantity > 0);
+    if (availablePrizes.length === 0) return null;
+
+    // Pick random prize type
+    const targetPrize = availablePrizes[Math.floor(Math.random() * availablePrizes.length)];
+
+    try {
+        const prizeRef = database.ref('prizes/' + targetPrize.key);
+
+        // Transaction: only decrement if quantity > 0
+        const result = await prizeRef.child('quantity').transaction((currentQty) => {
+            if (currentQty === null) return currentQty; // Ignore if node missing
+            if (currentQty > 0) {
+                return currentQty - 1;
+            }
+            return; // Abort if 0
+        });
+
+        if (result.committed) {
+            return targetPrize; // Return local copy of prize (name, emoji)
+        } else {
+            // Failed to commit (likely out of stock just now). 
+            // We could try again recursively, but for simplicity, we treat it as "bad luck" 
+            // or let the user spin again (but we already marked them as 'played' in the main flow? 
+            // No, main flow marks played AFTER this function returns).
+
+            // Actually, if this fails, we effectively ran out of THAT specific prize.
+            // Let's try ONE more time with a fresh filtered list?
+            // For now, return null -> treated as "Lose".
+            console.log('Prize contention: missed prize', targetPrize.name);
+            return null;
+        }
+    } catch (error) {
+        console.error('Transaction error:', error);
+        return null;
     }
 }
 
@@ -475,7 +421,6 @@ function showResult(isWin, prize, title, message) {
     const resultMessage = document.getElementById('resultMessage');
     const prizeName = document.getElementById('prizeName');
 
-    // Create overlay
     let overlay = document.querySelector('.overlay');
     if (!overlay) {
         overlay = document.createElement('div');
@@ -519,7 +464,7 @@ function closeResult() {
     }, 400);
 }
 
-// ===== Confetti Effect - Bakery Style =====
+// ===== Confetti Effect =====
 function createConfetti() {
     const bakeryEmojis = ['🧁', '🍩', '🍰', '🍪', '🍫', '🍬', '🎂', '🍭', '💖', '✨'];
 
@@ -538,88 +483,23 @@ function createConfetti() {
     }
 }
 
-// ===== Admin Functions (exposed globally) =====
-window.resetAllPrizes = async function () {
-    if (confirm('⚠️ Reset tất cả giải thưởng về 0?\n\nĐiều này sẽ:\n- Đặt số quà đã phát = 0\n- Xóa trạng thái trúng của device này')) {
-        try {
-            // Reset Firebase counter to 0
-            if (prizeCounterRef) {
-                await prizeCounterRef.set(0);
-            }
-            // Reset localStorage
-            localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, '0');
-            localStorage.removeItem('device_has_won');
-
-            alert('✅ Đã reset thành công!');
-            location.reload();
-        } catch (error) {
-            console.error('Reset error:', error);
-            alert('❌ Lỗi reset: ' + error.message);
-        }
-    }
-};
-
-window.setPrizeCount = async function () {
-    const currentCount = await getClaimedCount();
-    const newCount = prompt(`Nhập số quà ĐÃ PHÁT (hiện tại: ${currentCount}):\n\n(Nhập 0-${CONFIG.TOTAL_PRIZES})`, currentCount);
-
-    if (newCount !== null) {
-        const count = parseInt(newCount);
-        if (isNaN(count) || count < 0 || count > CONFIG.TOTAL_PRIZES) {
-            alert('❌ Số không hợp lệ! Nhập từ 0 đến ' + CONFIG.TOTAL_PRIZES);
-            return;
-        }
-
-        try {
-            // Set Firebase counter
-            if (prizeCounterRef) {
-                await prizeCounterRef.set(count);
-            }
-            // Set localStorage
-            localStorage.setItem('claimed_count_' + CONFIG.COUNTER_KEY, count);
-
-            alert(`✅ Đã đặt số quà đã phát = ${count}`);
-            location.reload();
-        } catch (error) {
-            console.error('Set count error:', error);
-            alert('❌ Lỗi: ' + error.message);
-        }
-    }
-};
-
-window.clearMyWinStatus = function () {
-    localStorage.removeItem('device_has_won');
-    alert('✅ Đã xóa trạng thái trúng của device này!');
-    location.reload();
-};
-
-window.getRewardData = async function () {
-    const claimedCount = await getClaimedCount();
-    const currentPrizes = window.prizeTimes || [];
-    const total = currentPrizes.length > 0 ? currentPrizes.length : CONFIG.TOTAL_PRIZES;
-
+// ===== Admin Data Exporter =====
+window.getRewardData = function () {
+    // Only used by Admin page now
     return {
-        date: new Date().toDateString(),
-        totalPrizes: total,
-        claimedCount: claimedCount,
-        prizes: currentPrizes.map((prize, index) => ({
-            ...prize,
-            claimed: index < claimedCount
-        }))
+        totalPrizes: CONFIG.REMAINING_PRIZES, // Current total
+        prizes: PRIZES
     };
 };
 
-// Clear ALL Firebase data
 window.clearAllFirebaseData = async function () {
-    if (confirm('⚠️ XÓA TOÀN BỘ DỮ LIỆU FIREBASE?\n\nĐiều này sẽ xóa:\n- Tất cả giải thưởng\n- Lịch sử tham gia\n- Số lượng đã phát\n- Cài đặt\n\nBạn có chắc chắn?')) {
+    if (confirm('⚠️ XÓA TOÀN BỘ DỮ LIỆU FIREBASE?')) {
         try {
             if (database) {
                 await database.ref('/').remove();
                 localStorage.clear();
                 alert('✅ Đã xóa toàn bộ dữ liệu!');
                 location.reload();
-            } else {
-                alert('❌ Firebase chưa kết nối!');
             }
         } catch (error) {
             alert('❌ Lỗi: ' + error.message);
@@ -627,7 +507,6 @@ window.clearAllFirebaseData = async function () {
     }
 };
 
-window.getClaimedCount = getClaimedCount;
 window.CONFIG = CONFIG;
 
 

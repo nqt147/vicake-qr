@@ -18,22 +18,22 @@
 
         <div class="admin-header">
             <h1 class="admin-title">⚙️ Quản Lý Giải Thưởng</h1>
-            <p class="admin-subtitle">Xem trạng thái và quản lý các giải thưởng trong ngày</p>
+            <p class="admin-subtitle">Hệ thống kho quà ngẫu nhiên</p>
         </div>
 
         <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-value" id="totalPrizes">10</div>
-                <div class="stat-label">Tổng giải thưởng</div>
+                <div class="stat-value" id="totalPrizes">-</div>
+                <div class="stat-label">Tổng (Kho + Đã phát)</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="claimedPrizes">0</div>
+                <div class="stat-value" id="claimedPrizes">-</div>
                 <div class="stat-label">Đã phát</div>
             </div>
             <div class="stat-card">
-                <div class="stat-value" id="remainingPrizes">10</div>
-                <div class="stat-label">Còn lại</div>
+                <div class="stat-value" id="remainingPrizes">-</div>
+                <div class="stat-label">Còn lại trong kho</div>
             </div>
             <div class="stat-card">
                 <div class="stat-value" id="winRateDisplay">50%</div>
@@ -58,11 +58,11 @@
 
         <!-- Prize Management Section -->
         <div class="prize-list" style="margin-bottom: 30px;">
-            <h3>🎁 Quản Lý Giải Thưởng</h3>
+            <h3>🎁 Kho Giải Thưởng</h3>
 
             <!-- Add New Prize Form -->
             <div style="padding: 15px; background: rgba(255,182,193,0.2); border-radius: 15px; margin-bottom: 15px;">
-                <h4 style="margin-bottom: 10px;">➕ Thêm giải thưởng mới</h4>
+                <h4 style="margin-bottom: 10px;">➕ Thêm giải thưởng vào kho</h4>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                     <input type="text" id="newPrizeName" placeholder="Tên giải (VD: Voucher 100K)"
                         style="flex: 2; min-width: 150px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; font-family: inherit;">
@@ -80,12 +80,6 @@
             <div id="prizeManageList">
                 <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
             </div>
-
-            <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid var(--soft-pink);">
-                <p style="font-size: 0.85rem; color: var(--text-secondary);">
-                    💡 Tổng giải thưởng: <strong id="totalPrizesCount">0</strong>
-                </p>
-            </div>
         </div>
 
         <!-- QR Code Section -->
@@ -96,14 +90,6 @@
             <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 10px;">
                 Chia sẻ mã QR này cho người dùng để scan nhận thưởng
             </p>
-        </div>
-
-        <!-- Prize List -->
-        <div class="prize-list">
-            <h3>📋 Danh Sách Giải Thưởng Hôm Nay</h3>
-            <div id="prizeListContainer">
-                <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
-            </div>
         </div>
 
         <!-- History Section -->
@@ -119,12 +105,6 @@
             <button class="btn btn-primary" onclick="refreshData()">
                 🔄 Làm mới
             </button>
-            <button class="btn btn-danger" onclick="resetAllPrizes()">
-                🗑️ Reset về 0
-            </button>
-            <button class="btn btn-success" onclick="setPrizeCount()">
-                ⚙️ Đặt số lượng
-            </button>
             <button class="btn btn-danger" onclick="clearHistory()">
                 🗑️ Xóa lịch sử
             </button>
@@ -139,6 +119,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script src="app.js"></script>
     <script>
+        // Global stats
+        let totalHistoryCount = 0;
+
         // Initialize Admin Page
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(loadAdminData, 500); // Wait for app.js to initialize
@@ -147,106 +130,71 @@
 
         async function loadAdminData() {
             try {
-                const data = await getRewardData();
+                // Manually fetch history count since app.js no longer tracks it globally
+                await loadHistory();
 
-                // Update stats
-                document.getElementById('totalPrizes').textContent = data.totalPrizes;
-                document.getElementById('claimedPrizes').textContent = data.claimedCount;
-                document.getElementById('remainingPrizes').textContent = data.totalPrizes - data.claimedCount;
+                const data = await getRewardData(); // { totalPrizes: N, prizes: [] }
+                const remaining = data.totalPrizes; // Currently available
+                const claimed = totalHistoryCount; // Approximation from history (all tries? No, only wins?)
 
-                // Render prize list
-                const container = document.getElementById('prizeListContainer');
-                container.innerHTML = '';
+                // Wait, history includes Loses too. We need WON count.
+                // loadHistory calculates totalHistoryCount. Let's make it calculate WON count.
 
-                const now = Date.now();
-
-                data.prizes.forEach((prize, index) => {
-                    const availableTime = new Date(prize.availableAt);
-                    const timeStr = availableTime.toLocaleTimeString('vi-VN', {
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-
-                    let statusClass, statusText;
-                    if (prize.claimed) {
-                        statusClass = 'claimed';
-                        statusText = 'Đã phát';
-                    } else if (prize.availableAt <= now) {
-                        statusClass = 'available';
-                        statusText = 'Sẵn sàng';
-                    } else {
-                        statusClass = 'expired';
-                        statusText = 'Chờ ' + timeStr;
-                    }
-
-                    const html = `
-                        <div class="prize-item">
-                            <div class="prize-info">
-                                <span class="prize-emoji">${prize.emoji}</span>
-                                <div class="prize-details">
-                                    <div class="prize-title">${prize.name}</div>
-                                    <div class="prize-time">Mở lúc: ${timeStr}</div>
-                                </div>
-                            </div>
-                            <span class="prize-status ${statusClass}">${statusText}</span>
-                        </div>
-                    `;
-                    container.innerHTML += html;
-                });
+                // Since loadHistory is async and might finish after, we rely on it updating DOM/Variables.
+                // Let's call updateStats() separately.
             } catch (error) {
                 console.error('Error loading admin data:', error);
-                document.getElementById('prizeListContainer').innerHTML =
-                    '<p style="color: #f45c43;">Lỗi tải dữ liệu. Vui lòng thử lại.</p>';
             }
         }
 
         function generateQRCode() {
-            // Use the production URL if available
             let url = window.location.href.replace('admin.html', 'index.html');
-
-            // If on Vercel, use the proper domain
             if (window.location.hostname.includes('vercel.app')) {
                 url = window.location.origin + '/index.html';
             }
-
             document.getElementById('rewardUrl').textContent = url;
-
-            // Generate QR code
             const qr = qrcode(0, 'M');
             qr.addData(url);
             qr.make();
-
             document.getElementById('qrcode').innerHTML = qr.createImgTag(6, 0);
         }
 
         async function refreshData() {
-            document.getElementById('prizeListContainer').innerHTML =
+            document.getElementById('prizeManageList').innerHTML =
                 '<p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>';
-            await loadAdminData();
+            loadPrizes(); // Reload prizes
+            loadHistory(); // Reload history
         }
 
-        // Auto refresh every 10 seconds
-        setInterval(loadAdminData, 10000);
-        setInterval(loadHistory, 10000);
+        // Auto refresh
+        setInterval(() => {
+            loadPrizes();
+            loadHistory();
+        }, 10000);
 
-        // Load history
+        // Load history and calculate stats
         async function loadHistory() {
             const container = document.getElementById('historyContainer');
             if (!container) return;
 
             try {
                 if (typeof firebase !== 'undefined' && firebase.database) {
-                    const snapshot = await firebase.database().ref('history').orderByChild('time').limitToLast(50).once('value');
+                    const snapshot = await firebase.database().ref('history').limitToLast(100).once('value');
                     const data = snapshot.val();
+
+                    let wins = 0;
 
                     if (!data) {
                         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có lịch sử</p>';
+                        updateStats(0);
                         return;
                     }
 
-                    // Convert to array and sort by time desc
                     const entries = Object.entries(data).map(([key, val]) => ({ ...val, key }));
                     entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+                    // Count wins
+                    wins = entries.filter(e => e.won).length;
 
                     container.innerHTML = entries.map(entry => {
                         const time = new Date(entry.time).toLocaleString('vi-VN');
@@ -269,11 +217,23 @@
                             </div>
                         `;
                     }).join('');
+
+                    updateStats(wins);
                 }
             } catch (error) {
                 console.error('Load history error:', error);
                 container.innerHTML = '<p style="color: #f45c43;">Lỗi tải lịch sử</p>';
             }
+        }
+
+        function updateStats(wonCount) {
+            const data = getRewardData();
+            const remaining = data.totalPrizes || 0;
+            const total = remaining + wonCount;
+
+            document.getElementById('totalPrizes').textContent = total;
+            document.getElementById('claimedPrizes').textContent = wonCount;
+            document.getElementById('remainingPrizes').textContent = remaining;
         }
 
         // Clear history
@@ -290,9 +250,6 @@
             }
         };
 
-        // Load history on init
-        setTimeout(loadHistory, 800);
-
         // ===== Prize Management =====
         let prizesRef = null;
 
@@ -305,7 +262,6 @@
 
         async function loadPrizes() {
             const container = document.getElementById('prizeManageList');
-            const countEl = document.getElementById('totalPrizesCount');
             if (!container || !prizesRef) return;
 
             try {
@@ -314,28 +270,8 @@
                 const prizes = Object.entries(data).map(([key, val]) => ({ ...val, key }));
 
                 if (prizes.length === 0) {
-                    container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có giải thưởng. Hãy thêm mới!</p>';
-                    if (countEl) countEl.textContent = '0';
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Kho quà trống. Hãy nhập quà!</p>';
                     return;
-                }
-
-                // Calculate total
-                const total = prizes.reduce((sum, p) => sum + (p.quantity || 1), 0);
-                if (countEl) countEl.textContent = total;
-
-                // Also update Main Stats
-                const totalStatsEl = document.getElementById('totalPrizes');
-                const remainingStatsEl = document.getElementById('remainingPrizes');
-                const claimedStatsEl = document.getElementById('claimedPrizes');
-
-                if (totalStatsEl) totalStatsEl.textContent = total;
-
-                // Get current claimed count for accurate remaining calculation
-                if (typeof getClaimedCount === 'function' && remainingStatsEl && claimedStatsEl) {
-                    getClaimedCount().then(claimed => {
-                        claimedStatsEl.textContent = claimed;
-                        remainingStatsEl.textContent = Math.max(0, total - claimed);
-                    });
                 }
 
                 container.innerHTML = prizes.map(prize => `
@@ -344,7 +280,7 @@
                             <span class="prize-emoji">${prize.emoji || '🎁'}</span>
                             <div class="prize-details">
                                 <div class="prize-title">${prize.name}</div>
-                                <div class="prize-time">Số lượng: ${prize.quantity || 1}</div>
+                                <div class="prize-time">Còn lại: <b>${prize.quantity || 0}</b></div>
                             </div>
                         </div>
                         <button onclick="deletePrize('${prize.key}')" 
@@ -354,10 +290,12 @@
                     </div>
                 `).join('');
 
-                // Update CONFIG.TOTAL_PRIZES
-                if (typeof CONFIG !== 'undefined') {
-                    CONFIG.TOTAL_PRIZES = total;
-                }
+                // Update stats if history already loaded
+                // Actually, let's just trigger loadHistory to refresh stats combination
+                // But avoid infinite loop if calling from interval
+
+                // We rely on getRewardData() which uses CONFIG.REMAINING_PRIZES updated by app.js listener
+                // app.js listener updates global CONFIG
             } catch (error) {
                 console.error('Load prizes error:', error);
                 container.innerHTML = '<p style="color: #f45c43;">Lỗi tải danh sách giải</p>';
@@ -382,12 +320,11 @@
                     createdAt: new Date().toISOString()
                 });
 
-                // Clear form
                 document.getElementById('newPrizeName').value = '';
                 document.getElementById('newPrizeEmoji').value = '';
                 document.getElementById('newPrizeQty').value = '1';
 
-                alert('✅ Đã thêm giải thưởng!');
+                alert('✅ Đã thêm quà vào kho!');
                 loadPrizes();
             } catch (error) {
                 alert('❌ Lỗi: ' + error.message);
@@ -395,7 +332,7 @@
         };
 
         window.deletePrize = async function (key) {
-            if (confirm('Xóa giải thưởng này?')) {
+            if (confirm('Xóa giải thưởng này khỏi kho?')) {
                 try {
                     await prizesRef.child(key).remove();
                     loadPrizes();
