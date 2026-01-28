@@ -261,28 +261,6 @@ async function hasPhonePlayed(phone) {
 }
 
 // Save play to history
-async function savePlayHistory(phone, won, prize = null) {
-    const cleaned = phone.replace(/\D/g, '');
-    const record = {
-        phone: cleaned,
-        time: new Date().toISOString(),
-        won: won,
-        prize: prize ? prize.name : null
-    };
-
-    if (historyRef) {
-        try {
-            await historyRef.push(record);
-            await playedPhonesRef.child(cleaned).set({
-                playedAt: record.time,
-                won: won
-            });
-        } catch (error) {
-            console.error('Save history error:', error);
-        }
-    }
-}
-
 // Show phone error
 function showPhoneError(message) {
     const errorEl = document.getElementById('phoneError');
@@ -299,6 +277,25 @@ function hidePhoneError() {
     }
 }
 
+// ===== History Logging =====
+async function savePlayHistory(phone, won, prize = null) {
+    const cleaned = phone ? phone.replace(/\D/g, '') : 'anonymous';
+
+    if (database) {
+        try {
+            await database.ref('history').push({
+                phone: cleaned,
+                time: new Date().toISOString(),
+                won: won,
+                prize: prize ? prize.name : null,
+                type: 'unlimited-play'
+            });
+        } catch (error) {
+            console.error('Save history error:', error);
+        }
+    }
+}
+
 // ===== Prize Logic (CORE) =====
 async function tryGetPrize() {
     const spinBtn = document.getElementById('spinBtn');
@@ -310,13 +307,6 @@ async function tryGetPrize() {
     // Validate phone
     if (!phone || !isValidPhone(phone)) {
         showPhoneError('⚠️ Vui lòng nhập số điện thoại hợp lệ (10 số, bắt đầu bằng 0)');
-        return;
-    }
-
-    // Check if phone already played
-    const alreadyPlayed = await hasPhonePlayed(phone);
-    if (alreadyPlayed) {
-        showPhoneError('📱 Số điện thoại này đã tham gia rồi!');
         return;
     }
 
@@ -346,20 +336,18 @@ async function tryGetPrize() {
             if (wonPrize) {
                 // Success!
                 await savePlayHistory(phone, true, wonPrize);
-                markDeviceWon();
 
                 showResult(true, wonPrize, "🎊 CHÚC MỪNG! 🎊", "Bạn đã trúng thưởng:");
                 createConfetti();
-
-                if (phoneInput) phoneInput.disabled = true;
+                // Note: We do NOT disable phone input anymore, allowing them to spin again.
                 return;
             }
         }
 
-        // If unlucky OR if attemptToClaimRandomPrize failed (race condition/out of stock during spin)
+        // If unlucky OR if transaction failed
         await savePlayHistory(phone, false);
-        showResult(false, null, "chúc bạn năm mới vui vẻ! 🥳", "Cảm ơn bạn đã tham gia!");
-        if (phoneInput) phoneInput.disabled = true;
+        showResult(false, null, "Chúc bạn may mắn lần sau!", "Cảm ơn bạn đã tham gia!");
+        // Note: We do NOT disable phone input anymore, allowing them to spin again.
 
     } catch (e) {
         console.error(e);
