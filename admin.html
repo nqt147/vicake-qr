@@ -95,6 +95,15 @@
         <!-- History Section -->
         <div class="prize-list" style="margin-bottom: 30px;">
             <h3>📜 Lịch Sử Tham Gia</h3>
+            <!-- Search Box -->
+            <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <input type="text" id="historySearch" placeholder="🔍 Tìm SĐT hoặc mã hóa đơn..."
+                    oninput="filterHistory(this.value)"
+                    style="flex: 1; min-width: 200px; padding: 12px 15px; border: 2px solid var(--soft-pink); border-radius: 15px; font-family: inherit; font-size: 0.95rem;">
+                <button class="btn btn-success" onclick="exportToExcel()" style="white-space: nowrap;">
+                    📄 Xuất Excel
+                </button>
+            </div>
             <div id="historyContainer" style="max-height: 300px; overflow-y: auto;">
                 <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
             </div>
@@ -172,6 +181,9 @@
             loadHistory();
         }, 10000);
 
+        // Global history data for filtering
+        let allHistoryEntries = [];
+
         // Load history and calculate stats
         async function loadHistory() {
             const container = document.getElementById('historyContainer');
@@ -186,39 +198,22 @@
 
                     if (!data) {
                         container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có lịch sử</p>';
+                        allHistoryEntries = [];
                         updateStats(0);
                         return;
                     }
 
                     const entries = Object.entries(data).map(([key, val]) => ({ ...val, key }));
                     entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+                    allHistoryEntries = entries; // Store for filtering
 
                     // Count wins
                     wins = entries.filter(e => e.won).length;
 
-                    container.innerHTML = entries.map(entry => {
-                        const time = new Date(entry.time).toLocaleString('vi-VN');
-                        const status = entry.won ? '🎉 Trúng' : '😅 Trượt';
-                        const prize = entry.prize || '-';
-                        const invoiceCode = entry.invoiceCode || '';
-                        const statusClass = entry.won ? 'available' : 'expired';
-                        return `
-                            <div class="prize-item" style="margin-bottom: 8px;">
-                                <div class="prize-info">
-                                    <span class="prize-emoji">📱</span>
-                                    <div class="prize-details">
-                                        <div class="prize-title">${entry.phone}</div>
-                                        <div class="prize-time">${time}</div>
-                                        ${invoiceCode ? `<div style="font-size: 0.75rem; color: var(--primary-pink); font-weight: 600;">🧾 HD: ${invoiceCode}</div>` : ''}
-                                    </div>
-                                </div>
-                                <div style="text-align: right;">
-                                    <span class="prize-status ${statusClass}">${status}</span>
-                                    ${entry.prize ? `<div style="font-size: 0.8rem; color: var(--text-secondary);">${prize}</div>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
+                    // Render with current search filter
+                    const searchInput = document.getElementById('historySearch');
+                    const searchQuery = searchInput ? searchInput.value : '';
+                    renderHistoryEntries(entries, searchQuery);
 
                     updateStats(wins);
                 }
@@ -226,6 +221,123 @@
                 console.error('Load history error:', error);
                 container.innerHTML = '<p style="color: #f45c43;">Lỗi tải lịch sử</p>';
             }
+        }
+
+        // Filter history by search query
+        function filterHistory(query) {
+            renderHistoryEntries(allHistoryEntries, query);
+        }
+
+        // Render history entries with optional filter
+        function renderHistoryEntries(entries, searchQuery = '') {
+            const container = document.getElementById('historyContainer');
+            if (!container) return;
+
+            let filteredEntries = entries;
+
+            if (searchQuery.trim()) {
+                const q = searchQuery.trim().toLowerCase();
+                filteredEntries = entries.filter(entry => {
+                    const phone = (entry.phone || '').toLowerCase();
+                    const invoice = (entry.invoiceCode || '').toLowerCase();
+                    return phone.includes(q) || invoice.includes(q);
+                });
+            }
+
+            if (filteredEntries.length === 0) {
+                container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Không tìm thấy kết quả</p>';
+                return;
+            }
+
+            container.innerHTML = filteredEntries.map(entry => {
+                const time = new Date(entry.time).toLocaleString('vi-VN');
+                const status = entry.won ? '🎉 Trúng' : '😅 Trượt';
+                const prize = entry.prize || '-';
+                const invoiceCode = entry.invoiceCode || '';
+                const statusClass = entry.won ? 'available' : 'expired';
+                return `
+                    <div class="prize-item" style="margin-bottom: 8px;">
+                        <div class="prize-info">
+                            <span class="prize-emoji">📱</span>
+                            <div class="prize-details">
+                                <div class="prize-title">${entry.phone}</div>
+                                <div class="prize-time">${time}</div>
+                                ${invoiceCode ? `<div style="font-size: 0.75rem; color: var(--primary-pink); font-weight: 600;">🧾 HD: ${invoiceCode}</div>` : ''}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <span class="prize-status ${statusClass}">${status}</span>
+                            ${entry.prize ? `<div style="font-size: 0.8rem; color: var(--text-secondary);">${prize}</div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Export history to Excel (CSV format)
+        function exportToExcel() {
+            if (allHistoryEntries.length === 0) {
+                alert('⚠️ Không có dữ liệu để xuất!');
+                return;
+            }
+
+            // Get filtered entries based on current search
+            const searchInput = document.getElementById('historySearch');
+            const searchQuery = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+            let dataToExport = allHistoryEntries;
+            if (searchQuery) {
+                dataToExport = allHistoryEntries.filter(entry => {
+                    const phone = (entry.phone || '').toLowerCase();
+                    const invoice = (entry.invoiceCode || '').toLowerCase();
+                    return phone.includes(searchQuery) || invoice.includes(searchQuery);
+                });
+            }
+
+            if (dataToExport.length === 0) {
+                alert('⚠️ Không có dữ liệu phù hợp để xuất!');
+                return;
+            }
+
+            // CSV Headers
+            const headers = ['STT', 'Số điện thoại', 'Mã hóa đơn', 'Thời gian', 'Kết quả', 'Giải thưởng'];
+
+            // CSV Rows
+            const rows = dataToExport.map((entry, index) => {
+                const time = new Date(entry.time).toLocaleString('vi-VN');
+                const result = entry.won ? 'Trúng' : 'Trượt';
+                const prize = entry.prize || '';
+                const invoiceCode = entry.invoiceCode || '';
+
+                return [
+                    index + 1,
+                    entry.phone || '',
+                    invoiceCode,
+                    time,
+                    result,
+                    prize
+                ].map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',');
+            });
+
+            // Combine headers and rows
+            const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n'); // BOM for UTF-8
+
+            // Create download link
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            const now = new Date();
+            const filename = `lich-su-tham-gia_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}.csv`;
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', filename);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            alert(`✅ Đã xuất ${dataToExport.length} bản ghi ra file Excel!`);
         }
 
         function updateStats(wonCount) {
