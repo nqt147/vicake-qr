@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚙️ Quản Lý Giải Thưởng</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+</head>
+
+<body>
+    <div class="admin-container">
+        <a href="index.html" class="back-link">← Quay lại trang nhận thưởng</a>
+
+        <div class="admin-header">
+            <h1 class="admin-title">⚙️ Quản Lý Giải Thưởng </h1>
+            <p class="admin-subtitle">Hệ thống kho quà ngẫu nhiên</p>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="totalPrizes">-</div>
+                <div class="stat-label">Tổng (Kho + Đã phát)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="claimedPrizes">-</div>
+                <div class="stat-label">Đã phát</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="remainingPrizes">-</div>
+                <div class="stat-label">Còn lại trong kho</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="winRateDisplay">50%</div>
+                <div class="stat-label">Tỷ lệ trúng</div>
+            </div>
+        </div>
+
+        <!-- Settings Section -->
+        <div class="prize-list" style="margin-bottom: 30px;">
+            <h3>🎛️ Cài Đặt</h3>
+            <div style="padding: 15px 0;">
+                <label style="display: block; margin-bottom: 10px; font-weight: 600;">
+                    Tỷ lệ trúng thưởng: <span id="winRateValue">50</span>%
+                </label>
+                <input type="range" id="winRateSlider" min="0" max="100" value="50"
+                    style="width: 100%; accent-color: var(--primary-pink);" onchange="updateWinRate(this.value)">
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()" style="margin-top: 15px; width: 100%;">
+                💾 Lưu cài đặt
+            </button>
+        </div>
+
+        <!-- Prize Management Section -->
+        <div class="prize-list" style="margin-bottom: 30px;">
+            <h3>🎁 Kho Giải Thưởng</h3>
+
+            <!-- Add New Prize Form -->
+            <div style="padding: 15px; background: rgba(255,182,193,0.2); border-radius: 15px; margin-bottom: 15px;">
+                <h4 style="margin-bottom: 10px;">➕ Thêm giải thưởng vào kho</h4>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <input type="text" id="newPrizeName" placeholder="Tên giải (VD: Voucher 100K)"
+                        style="flex: 2; min-width: 150px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; font-family: inherit;">
+                    <input type="text" id="newPrizeEmoji" placeholder="🎁" maxlength="4"
+                        style="width: 60px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; text-align: center; font-size: 1.2rem;">
+                    <input type="number" id="newPrizeQty" placeholder="SL" min="1" value="1"
+                        style="width: 60px; padding: 10px; border: 2px solid var(--soft-pink); border-radius: 10px; text-align: center;">
+                    <button class="btn btn-success" onclick="addPrize()" style="padding: 10px 20px;">
+                        ➕ Thêm
+                    </button>
+                </div>
+            </div>
+
+            <!-- Prize List -->
+            <div id="prizeManageList">
+                <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
+            </div>
+        </div>
+
+        <!-- QR Code Section -->
+        <div class="qr-section">
+            <h3>📱 Mã QR Nhận Thưởng</h3>
+            <div id="qrcode"></div>
+            <p class="qr-url" id="rewardUrl"></p>
+            <p style="color: var(--text-secondary); font-size: 0.85rem; margin-top: 10px;">
+                Chia sẻ mã QR này cho người dùng để scan nhận thưởng
+            </p>
+        </div>
+
+        <!-- History Section -->
+        <div class="prize-list" style="margin-bottom: 30px;">
+            <h3>📜 Lịch Sử Tham Gia</h3>
+            <div id="historyContainer" style="max-height: 300px; overflow-y: auto;">
+                <p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button class="btn btn-primary" onclick="refreshData()">
+                🔄 Làm mới
+            </button>
+            <button class="btn btn-danger" onclick="clearHistory()">
+                🗑️ Xóa lịch sử
+            </button>
+            <button class="btn btn-danger" onclick="clearAllFirebaseData()" style="background: #2d1810;">
+                💣 XÓA TẤT CẢ
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Global stats
+        let totalHistoryCount = 0;
+
+        // Initialize Admin Page
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(loadAdminData, 500); // Wait for app.js to initialize
+            generateQRCode();
+        });
+
+        async function loadAdminData() {
+            try {
+                // Manually fetch history count since app.js no longer tracks it globally
+                await loadHistory();
+
+                const data = await getRewardData(); // { totalPrizes: N, prizes: [] }
+                const remaining = data.totalPrizes; // Currently available
+                const claimed = totalHistoryCount; // Approximation from history (all tries? No, only wins?)
+
+                // Wait, history includes Loses too. We need WON count.
+                // loadHistory calculates totalHistoryCount. Let's make it calculate WON count.
+
+                // Since loadHistory is async and might finish after, we rely on it updating DOM/Variables.
+                // Let's call updateStats() separately.
+            } catch (error) {
+                console.error('Error loading admin data:', error);
+            }
+        }
+
+        function generateQRCode() {
+            let url = window.location.href.replace('admin.html', 'index.html');
+            if (window.location.hostname.includes('vercel.app')) {
+                url = window.location.origin + '/index.html';
+            }
+            document.getElementById('rewardUrl').textContent = url;
+            const qr = qrcode(0, 'M');
+            qr.addData(url);
+            qr.make();
+            document.getElementById('qrcode').innerHTML = qr.createImgTag(6, 0);
+        }
+
+        async function refreshData() {
+            document.getElementById('prizeManageList').innerHTML =
+                '<p style="text-align: center; color: var(--text-secondary);">Đang tải...</p>';
+            loadPrizes(); // Reload prizes
+            loadHistory(); // Reload history
+        }
+
+        // Auto refresh
+        setInterval(() => {
+            loadPrizes();
+            loadHistory();
+        }, 10000);
+
+        // Load history and calculate stats
+        async function loadHistory() {
+            const container = document.getElementById('historyContainer');
+            if (!container) return;
+
+            try {
+                if (typeof firebase !== 'undefined' && firebase.database) {
+                    const snapshot = await firebase.database().ref('history').limitToLast(100).once('value');
+                    const data = snapshot.val();
+
+                    let wins = 0;
+
+                    if (!data) {
+                        container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Chưa có lịch sử</p>';
+                        updateStats(0);
+                        return;
+                    }
+
+                    const entries = Object.entries(data).map(([key, val]) => ({ ...val, key }));
+                    entries.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+                    // Count wins
+                    wins = entries.filter(e => e.won).length;
+
+                    container.innerHTML = entries.map(entry => {
+                        const time = new Date(entry.time).toLocaleString('vi-VN');
+                        const status = entry.won ? '🎉 Trúng' : '😅 Trượt';
+                        const prize = entry.prize || '-';
+                        const statusClass = entry.won ? 'available' : 'expired';
+                        return `
+                            <div class="prize-item" style="margin-bottom: 8px;">
+                                <div class="prize-info">
+                                    <span class="prize-emoji">📱</span>
+                                    <div class="prize-details">
+                                        <div class="prize-title">${entry.phone}</div>
+                                        <div class="prize-time">${time}</div>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <span class="prize-status ${statusClass}">${status}</span>
+                                    ${entry.prize ? `<div style="font-size: 0.8rem; color: var(--text-secondary);">${prize}</div>` : ''}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    updateStats(wins);
+                }
+            } catch (error) {
+                console.error('Load history error:', error);
+                container.innerHTML = '<p style="color: #f45c43;">Lỗi tải lịch sử</p>';
+            }
+        }
+
+        function updateStats(wonCount) {
+            const data = getRewardData();
+            const remaining = data.totalPrizes || 0;
+            const total = remaining + wonCount;
+
+            document.getElementById('totalPrizes').textContent = total;
+            document.getElementById('claimedPrizes').textContent = wonCount;
+            document.getElementById('remainingPrizes').textContent = remaining;
+        }
+
+        // Clear history
+        window.clearHistory = async function () {
+            if (confirm('⚠️ Xóa toàn bộ lịch sử tham gia?\n\nĐiều này sẽ cho phép tất cả SĐT chơi lại.')) {
+                try {
+                    await firebase.database().ref('history').remove();
+                    await firebase.database().ref('playedPhones').remove();
+                    alert('✅ Đã xóa lịch sử!');
+                    location.reload();
+                } catch (error) {
+                    alert('❌ Lỗi: ' + error.message);
+                }
+            }
+        };
+
+        // ===== Prize Management =====
+        let prizesRef = null;
+
+        function initPrizeManagement() {
+            if (typeof firebase !== 'undefined' && firebase.database) {
+                prizesRef = firebase.database().ref('prizes');
+                loadPrizes();
+            }
+        }
+
+        async function loadPrizes() {
+            const container = document.getElementById('prizeManageList');
+            if (!container || !prizesRef) return;
+
+            try {
+                const snapshot = await prizesRef.once('value');
+                const data = snapshot.val() || {};
+                const prizes = Object.entries(data).map(([key, val]) => ({ ...val, key }));
+
+                if (prizes.length === 0) {
+                    container.innerHTML = '<p style="text-align: center; color: var(--text-secondary);">Kho quà trống. Hãy nhập quà!</p>';
+                    return;
+                }
+
+                container.innerHTML = prizes.map(prize => `
+                    <div class="prize-item" style="margin-bottom: 8px;">
+                        <div class="prize-info">
+                            <span class="prize-emoji">${prize.emoji || '🎁'}</span>
+                            <div class="prize-details">
+                                <div class="prize-title">${prize.name}</div>
+                                <div class="prize-time">Còn lại: <b>${prize.quantity || 0}</b></div>
+                            </div>
+                        </div>
+                        <button onclick="deletePrize('${prize.key}')" 
+                            style="background: #ff4757; color: white; border: none; padding: 8px 15px; border-radius: 15px; cursor: pointer; font-weight: 600;">
+                            🗑️ Xóa
+                        </button>
+                    </div>
+                `).join('');
+
+                // Update stats if history already loaded
+                // Actually, let's just trigger loadHistory to refresh stats combination
+                // But avoid infinite loop if calling from interval
+
+                // We rely on getRewardData() which uses CONFIG.REMAINING_PRIZES updated by app.js listener
+                // app.js listener updates global CONFIG
+            } catch (error) {
+                console.error('Load prizes error:', error);
+                container.innerHTML = '<p style="color: #f45c43;">Lỗi tải danh sách giải</p>';
+            }
+        }
+
+        window.addPrize = async function () {
+            const name = document.getElementById('newPrizeName').value.trim();
+            const emoji = document.getElementById('newPrizeEmoji').value.trim() || '🎁';
+            const quantity = parseInt(document.getElementById('newPrizeQty').value) || 1;
+
+            if (!name) {
+                alert('⚠️ Vui lòng nhập tên giải thưởng!');
+                return;
+            }
+
+            try {
+                await prizesRef.push({
+                    name: name,
+                    emoji: emoji,
+                    quantity: quantity,
+                    createdAt: new Date().toISOString()
+                });
+
+                document.getElementById('newPrizeName').value = '';
+                document.getElementById('newPrizeEmoji').value = '';
+                document.getElementById('newPrizeQty').value = '1';
+
+                alert('✅ Đã thêm quà vào kho!');
+                loadPrizes();
+            } catch (error) {
+                alert('❌ Lỗi: ' + error.message);
+            }
+        };
+
+        window.deletePrize = async function (key) {
+            if (confirm('Xóa giải thưởng này khỏi kho?')) {
+                try {
+                    await prizesRef.child(key).remove();
+                    loadPrizes();
+                } catch (error) {
+                    alert('❌ Lỗi: ' + error.message);
+                }
+            }
+        };
+
+        // Init prize management
+        setTimeout(initPrizeManagement, 900);
+    </script>
+</body>
+
+</html>

@@ -212,7 +212,7 @@ function updateUI() {
             spinBtn.querySelector('.button-text').textContent = 'BẠN ĐÃ TRÚNG THƯỞNG';
         } else {
             spinBtn.disabled = false;
-            spinBtn.querySelector('.button-text').textContent = 'QUAY NGAY';
+            spinBtn.querySelector('.button-text').textContent = 'CHẠM NGAY';
         }
     }
 }
