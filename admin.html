@@ -200,6 +200,7 @@
                         const time = new Date(entry.time).toLocaleString('vi-VN');
                         const status = entry.won ? '🎉 Trúng' : '😅 Trượt';
                         const prize = entry.prize || '-';
+                        const invoiceCode = entry.invoiceCode || '';
                         const statusClass = entry.won ? 'available' : 'expired';
                         return `
                             <div class="prize-item" style="margin-bottom: 8px;">
@@ -208,6 +209,7 @@
                                     <div class="prize-details">
                                         <div class="prize-title">${entry.phone}</div>
                                         <div class="prize-time">${time}</div>
+                                        ${invoiceCode ? `<div style="font-size: 0.75rem; color: var(--primary-pink); font-weight: 600;">🧾 HD: ${invoiceCode}</div>` : ''}
                                     </div>
                                 </div>
                                 <div style="text-align: right;">
