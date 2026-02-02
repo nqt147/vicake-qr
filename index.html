@@ -32,6 +32,13 @@
                 <span class="counter-value" id="prizeCount">...</span>
             </div>
 
+            <!-- Invoice Code Input -->
+            <div class="phone-input-section">
+                <input type="text" id="invoiceCodeInput" placeholder="Nhập mã hóa đơn..." maxlength="30"
+                    autocomplete="off" style="margin-bottom: 15px;">
+                <p id="invoiceError" style="display: none;"></p>
+            </div>
+
             <!-- Phone Input - Pill Shaped -->
             <div class="phone-input-section">
                 <input type="tel" id="phoneInput" placeholder="09xx..." maxlength="12" oninput="formatPhone(this)"

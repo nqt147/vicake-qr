@@ -217,14 +217,16 @@ function updateUI() {
     }
 }
 
-// ===== Phone Validation & History =====
+// ===== Phone & Invoice Validation & History =====
 let historyRef = null;
 let playedPhonesRef = null;
+let usedInvoicesRef = null;
 
 function initPhoneTracking() {
     if (database) {
         historyRef = database.ref('history');
         playedPhonesRef = database.ref('playedPhones');
+        usedInvoicesRef = database.ref('usedInvoices');
     }
 }
 
@@ -260,6 +262,59 @@ async function hasPhonePlayed(phone) {
     return false;
 }
 
+// ===== Invoice Code Validation =====
+// Check if invoice code has already been used
+async function hasInvoiceUsed(invoiceCode) {
+    const cleaned = invoiceCode.trim().toUpperCase();
+    if (usedInvoicesRef) {
+        try {
+            const snapshot = await usedInvoicesRef.child(cleaned).once('value');
+            return snapshot.exists();
+        } catch (error) {
+            console.error('Check invoice error:', error);
+        }
+    }
+    return false;
+}
+
+// Mark invoice code as used
+async function markInvoiceUsed(invoiceCode, phone) {
+    const cleaned = invoiceCode.trim().toUpperCase();
+    if (usedInvoicesRef) {
+        try {
+            await usedInvoicesRef.child(cleaned).set({
+                usedAt: new Date().toISOString(),
+                phone: phone
+            });
+            return true;
+        } catch (error) {
+            console.error('Mark invoice used error:', error);
+        }
+    }
+    return false;
+}
+
+// Validate invoice code format (not empty)
+function isValidInvoiceCode(code) {
+    return code && code.trim().length >= 3;
+}
+
+// Show invoice error
+function showInvoiceError(message) {
+    const errorEl = document.getElementById('invoiceError');
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.style.display = 'block';
+    }
+}
+
+function hideInvoiceError() {
+    const errorEl = document.getElementById('invoiceError');
+    if (errorEl) {
+        errorEl.style.display = 'none';
+    }
+}
+
 // Save play to history
 // Show phone error
 function showPhoneError(message) {
@@ -278,17 +333,18 @@ function hidePhoneError() {
 }
 
 // ===== History Logging =====
-async function savePlayHistory(phone, won, prize = null) {
+async function savePlayHistory(phone, won, prize = null, invoiceCode = null) {
     const cleaned = phone ? phone.replace(/\D/g, '') : 'anonymous';
 
     if (database) {
         try {
             await database.ref('history').push({
                 phone: cleaned,
+                invoiceCode: invoiceCode ? invoiceCode.trim().toUpperCase() : null,
                 time: new Date().toISOString(),
                 won: won,
                 prize: prize ? prize.name : null,
-                type: 'unlimited-play'
+                type: 'invoice-based'
             });
         } catch (error) {
             console.error('Save history error:', error);
@@ -300,9 +356,25 @@ async function savePlayHistory(phone, won, prize = null) {
 async function tryGetPrize() {
     const spinBtn = document.getElementById('spinBtn');
     const phoneInput = document.getElementById('phoneInput');
+    const invoiceInput = document.getElementById('invoiceCodeInput');
     const phone = phoneInput ? phoneInput.value : '';
+    const invoiceCode = invoiceInput ? invoiceInput.value : '';
 
     hidePhoneError();
+    hideInvoiceError();
+
+    // Validate invoice code
+    if (!invoiceCode || !isValidInvoiceCode(invoiceCode)) {
+        showInvoiceError('⚠️ Vui lòng nhập mã hóa đơn (ít nhất 3 ký tự)');
+        return;
+    }
+
+    // Check if invoice has been used
+    const invoiceUsed = await hasInvoiceUsed(invoiceCode);
+    if (invoiceUsed) {
+        showInvoiceError('❌ Mã hóa đơn này đã được sử dụng!');
+        return;
+    }
 
     // Validate phone
     if (!phone || !isValidPhone(phone)) {
@@ -322,7 +394,8 @@ async function tryGetPrize() {
         // 2. Check Global Stock
         if (CONFIG.REMAINING_PRIZES <= 0) {
             showResult(false, null, "Đã hết giải thưởng!", "Tất cả giải thưởng đã được phát hết. Chúc bạn năm mới vui vẻ! 🥳");
-            await savePlayHistory(phone, false);
+            await markInvoiceUsed(invoiceCode, phone); // Mark invoice as used
+            await savePlayHistory(phone, false, null, invoiceCode);
             return;
         }
 
@@ -334,19 +407,24 @@ async function tryGetPrize() {
             const wonPrize = await attemptToClaimRandomPrize();
 
             if (wonPrize) {
-                // Success!
-                await savePlayHistory(phone, true, wonPrize);
+                // Success! Mark invoice as used
+                await markInvoiceUsed(invoiceCode, phone);
+                await savePlayHistory(phone, true, wonPrize, invoiceCode);
 
                 showResult(true, wonPrize, "🎊 CHÚC MỪNG! 🎊", "Bạn đã trúng thưởng:");
                 createConfetti();
-                // Note: We do NOT disable phone input anymore, allowing them to spin again.
+                // Clear inputs after successful use
+                if (invoiceInput) invoiceInput.value = '';
                 return;
             }
         }
 
-        // If unlucky OR if transaction failed
-        await savePlayHistory(phone, false);
+        // If unlucky OR if transaction failed - still mark invoice as used
+        await markInvoiceUsed(invoiceCode, phone);
+        await savePlayHistory(phone, false, null, invoiceCode);
         showResult(false, null, "Chúc bạn may mắn lần sau!", "Cảm ơn bạn đã tham gia!");
+        // Clear invoice input after use
+        if (invoiceInput) invoiceInput.value = '';
         // Note: We do NOT disable phone input anymore, allowing them to spin again.
 
     } catch (e) {
